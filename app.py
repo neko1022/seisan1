@@ -38,7 +38,7 @@ css_code = f"""
     .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; word-wrap: break-word; }}
 
     /* 項目の幅を個別に指定 */
-    .col-date {{ width: 100px; }}    /* 日付を狭く */
+    .col-date {{ width: 120px; }}    /* 日付を狭く */
     .col-payee {{ width: 20%; }}
     .col-item {{ width: 20%; }}
     .col-memo {{ width: auto; }}
