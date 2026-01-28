@@ -31,9 +31,19 @@ css_code = f"""
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
-    .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; }}
+    
+    /* テーブル全体のデザイン */
+    .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 12px; text-align: left; font-size: 0.9rem; }}
-    .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; }}
+    .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; word-wrap: break-word; }}
+
+    /* 項目の幅を個別に指定 */
+    .col-date {{ width: 100px; }}    /* 日付を狭く */
+    .col-payee {{ width: 20%; }}
+    .col-item {{ width: 20%; }}
+    .col-memo {{ width: auto; }}
+    .col-amount {{ width: 110px; }}   /* 金額も少し固定幅に */
+
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
@@ -94,7 +104,6 @@ else:
     selected_month = ""
     filtered_df = pd.DataFrame(columns=COLS)
 
-# 合計金額の計算
 total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
 st.markdown(f'<div class="header-box"><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
@@ -112,7 +121,6 @@ memo = st.text_area("備考", height=70)
 if st.button("登録する", use_container_width=True):
     clean_amount = "".join(filter(str.isdigit, amount_str))
     amount_val = int(clean_amount) if clean_amount else 0
-    
     if amount_val > 0:
         new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount_val]], columns=COLS)
         df_for_save = df_all.drop(columns=['年月'], errors='ignore')
@@ -127,7 +135,6 @@ if st.button("登録する", use_container_width=True):
 st.markdown("---")
 if not filtered_df.empty:
     st.write(f"### {selected_month} の明細")
-    
     delete_mode = st.toggle("🗑️ 編集・削除モード")
 
     if delete_mode:
@@ -136,7 +143,6 @@ if not filtered_df.empty:
             with cols[0]:
                 p = row['支払先'] if row['支払先'] != "" else "(未入力)"
                 i = row['品名・名目'] if row['品名・名目'] != "" else "(未入力)"
-                # 削除モードの金額にも「円」を追加
                 st.write(f"【{row['日付']}】 {p} / {i} / {int(row['金額']):,}円")
             with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
@@ -145,18 +151,26 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        # 通常表示（金額に「円」を追加）
+        # 通常表示
         rows_html = ""
         for _, r in filtered_df.iterrows():
             f_payee = r['支払先'] if pd.notna(r['支払先']) else ""
             f_item = r['品名・名目'] if pd.notna(r['品名・名目']) else ""
             f_memo = r['備考'] if pd.notna(r['備考']) else ""
-            # 金額セルに「円」を追加
             rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,} 円</td></tr>"
         
+        # クラス名を各 th に付与して幅を制御
         st.markdown(f'''
             <table class="table-style">
-                <thead><tr>{"".join([f"<th>{c}</th>" for c in COLS])}</tr></thead>
+                <thead>
+                    <tr>
+                        <th class="col-date">日付</th>
+                        <th class="col-payee">支払先</th>
+                        <th class="col-item">品名・名目</th>
+                        <th class="col-memo">備考</th>
+                        <th class="col-amount">金額</th>
+                    </tr>
+                </thead>
                 <tbody>{rows_html}</tbody>
             </table>
         ''', unsafe_allow_html=True)
