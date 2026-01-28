@@ -28,7 +28,11 @@ css_code = f"""
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
+    
+    /* 合計金額ラベルと数字のスタイル */
+    .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
+    
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
@@ -37,12 +41,12 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 12px; text-align: left; font-size: 0.9rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; word-wrap: break-word; }}
 
-    /* 項目の幅を個別に指定 */
-    .col-date {{ width: 130px; }}    /* 日付を狭く */
+    /* カラム幅の設定 */
+    .col-date {{ width: 130px; }}
     .col-payee {{ width: 20%; }}
     .col-item {{ width: 20%; }}
     .col-memo {{ width: auto; }}
-    .col-amount {{ width: 110px; }}   /* 金額も少し固定幅に */
+    .col-amount {{ width: 110px; }}
 
 </style>
 """
@@ -104,8 +108,16 @@ else:
     selected_month = ""
     filtered_df = pd.DataFrame(columns=COLS)
 
+# 合計金額の計算
 total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
-st.markdown(f'<div class="header-box"><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
+
+# 修正ポイント：「経費合計」ラベルを復活
+st.markdown(f'''
+    <div class="header-box">
+        <p class="total-label">経費合計</p>
+        <p class="total-a">{int(total_val):,} 円</p>
+    </div>
+''', unsafe_allow_html=True)
 
 # 2. 入力フォーム
 st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
@@ -134,7 +146,7 @@ if st.button("登録する", use_container_width=True):
 # 3. 履歴明細
 st.markdown("---")
 if not filtered_df.empty:
-    st.write(f"### {selected_month} の明細")
+    st.write(f"### 🗓️ {selected_month} の明細")
     delete_mode = st.toggle("🗑️ 編集・削除モード")
 
     if delete_mode:
@@ -151,7 +163,6 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        # 通常表示
         rows_html = ""
         for _, r in filtered_df.iterrows():
             f_payee = r['支払先'] if pd.notna(r['支払先']) else ""
@@ -159,7 +170,6 @@ if not filtered_df.empty:
             f_memo = r['備考'] if pd.notna(r['備考']) else ""
             rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,} 円</td></tr>"
         
-        # クラス名を各 th に付与して幅を制御
         st.markdown(f'''
             <table class="table-style">
                 <thead>
