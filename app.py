@@ -18,7 +18,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- デザイン & Enterキー移動の仕組み ---
+# --- デザイン & Enterキー移動 & テンキー強制の仕組み ---
 css_code = f"""
 <style>
     @font-face {{
@@ -38,18 +38,30 @@ css_code = f"""
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# Enterキーで次の入力欄へ移動するJavaScript
+# JavaScript: Enter移動 + 金額入力欄をテンキー対応に書き換え
 components.html(
     """
     <script>
     const doc = window.parent.document;
+    
+    // 定期的に金額入力欄を確認してテンキー属性を付与
+    setInterval(() => {
+        const inputs = doc.querySelectorAll('input');
+        inputs.forEach(input => {
+            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
+                input.type = 'number';
+                input.inputMode = 'numeric';
+                input.pattern = '[0-9]*';
+            }
+        });
+    }, 1000);
+
     doc.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
-            const inputs = Array.from(doc.querySelectorAll('input, textarea, select'));
-            const index = inputs.indexOf(doc.activeElement);
-            if (index > -1 && index < inputs.length - 1) {
-                // ボタン（登録）に到達するまで次の要素へフォーカス
-                inputs[index + 1].focus();
+            const allInputs = Array.from(doc.querySelectorAll('input, textarea, select, button'));
+            const activeIndex = allInputs.indexOf(doc.activeElement);
+            if (activeIndex > -1 && activeIndex < allInputs.length - 1) {
+                allInputs[activeIndex + 1].focus();
                 e.preventDefault();
             }
         }
@@ -92,13 +104,16 @@ with col1:
     payee = st.text_input("支払先", placeholder="例：〇〇商事")
 with col2:
     item_name = st.text_input("品名・名目", placeholder="例：交通費")
+    # ラベルに「金額」という文字を含めることでJSが検知します
     amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
 
 memo = st.text_area("備考", height=70)
 
 if st.button("登録する", use_container_width=True):
     try:
-        amount_val = int(amount_str.replace(",", "")) if amount_str else 0
+        # 数字以外の文字（カンマなど）を除去して数値化
+        clean_amount = "".join(filter(str.isdigit, amount_str))
+        amount_val = int(clean_amount) if clean_amount else 0
     except ValueError:
         st.error("金額には数字を入力してください。")
         amount_val = 0
