@@ -17,7 +17,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- スマホ最適化＆フォント強制適用のCSS ---
+# --- デザイン（CSS） ---
 css_code = f"""
 <style>
     @font-face {{
@@ -30,37 +30,50 @@ css_code = f"""
         font-family: 'Mochiy Pop One', sans-serif !important;
     }}
 
-    /* 上段の重なり解消と余白 */
+    /* 上段の重なり解消：高さをしっかり確保し、要素をブロック化 */
     .header-container {{
         border-bottom: 2px solid #5d6d7e;
-        padding: 15px 5px;
-        margin: 20px 0;
-        background-color: white;
+        padding: 20px 10px;
+        margin-bottom: 30px;
+        background-color: #ffffff;
+        display: block;
+        clear: both;
     }}
-    .total-text {{ font-size: 1rem; color: #333; display: block; }}
-    .total-amount {{ font-size: 1.8rem; font-weight: bold; color: #000; display: block; margin-top: 5px; }}
+    .total-text {{
+        font-size: 1.1rem;
+        color: #555;
+        display: block; /* 改行させる */
+        margin-bottom: 8px;
+    }}
+    .total-amount {{
+        font-size: 2.2rem;
+        font-weight: bold;
+        color: #000;
+        display: block; /* 改行させる */
+        line-height: 1.2;
+    }}
 
-    /* スマホでも項目が消えない独自テーブル設定 */
+    /* テーブル設定 */
     .custom-table-container {{
-        overflow-x: auto; /* 横スクロールを許可 */
+        overflow-x: auto;
         width: 100%;
+        margin-top: 20px;
     }}
     .custom-table {{
         width: 100%;
         border-collapse: collapse;
-        font-family: 'Mochiy Pop One', sans-serif !important;
-        font-size: 0.85rem;
+        font-size: 0.9rem;
     }}
     .custom-table th {{
         background-color: #5d6d7e;
         color: white;
         text-align: left;
-        padding: 10px;
+        padding: 12px 10px;
         white-space: nowrap;
     }}
     .custom-table td {{
         border-bottom: 1px solid #eee;
-        padding: 10px;
+        padding: 12px 10px;
         background-color: white;
     }}
 </style>
@@ -74,6 +87,8 @@ def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df["日付"] = pd.to_datetime(df["日付"]).dt.date
+        # 「nan」を空文字列に置き換える（VBAでいう「If IsNull Then ""」のような処理）
+        df = df.fillna("")
         return df
     return pd.DataFrame(columns=["日付", "支払先", "品名・名目", "備考", "金額"])
 
@@ -97,14 +112,19 @@ with st.expander("📝 新規データ入力"):
 df = load_data()
 if not df.empty:
     df['年月'] = df['日付'].apply(lambda x: x.strftime('%Y年%m月'))
-    selected_month = st.selectbox("表示月", sorted(df['年月'].unique(), reverse=True))
+    selected_month = st.selectbox("表示月を選択", sorted(df['年月'].unique(), reverse=True))
     filtered_df = df[df['年月'] == selected_month].drop(columns=['年月'])
     
-    # 合計表示
-    total = filtered_df["金額"].sum()
-    st.markdown(f'<div class="header-container"><span class="total-text">経費合計</span><span class="total-amount">{total:,} 円</span></div>', unsafe_allow_html=True)
+    # 合計表示（HTML構造を整理して重なりを防止）
+    total = pd.to_numeric(filtered_df["金額"]).sum()
+    st.markdown(f'''
+        <div class="header-container">
+            <span class="total-text">経費合計</span>
+            <span class="total-amount">{total:,} 円</span>
+        </div>
+    ''', unsafe_allow_html=True)
 
-    # 項目が絶対に消えないカスタムテーブル表示
+    # カスタムテーブル表示
     table_html = f"""
     <div class="custom-table-container">
         <table class="custom-table">
@@ -114,7 +134,7 @@ if not df.empty:
                 </tr>
             </thead>
             <tbody>
-                {"".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{r['金額']:,}</td></tr>" for _, r in filtered_df.iterrows()])}
+                {"".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>" for _, r in filtered_df.iterrows()])}
             </tbody>
         </table>
     </div>
