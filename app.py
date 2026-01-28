@@ -7,7 +7,7 @@ from datetime import date
 # ページ設定
 st.set_page_config(page_title="経費精算システム", layout="wide")
 
-# --- フォントファイルを読み込むための関数 ---
+# --- フォント読み込み ---
 def get_base64_font(font_file):
     if os.path.exists(font_file):
         with open(font_file, "rb") as f:
@@ -17,7 +17,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- デザイン（CSS） ---
+# --- デザイン（絶対に重ならないよう余白と高さを固定） ---
 css_code = f"""
 <style>
     @font-face {{
@@ -26,55 +26,58 @@ css_code = f"""
     }}
 
     /* 全体にフォントを適用 */
-    html, body, [class*="css"], div, span, p, input, select, textarea, button {{
+    html, body, div, span, p, input, select, textarea, button {{
         font-family: 'Mochiy Pop One', sans-serif !important;
     }}
 
-    /* 上段の重なり解消：高さをしっかり確保し、要素をブロック化 */
+    /* ヘッダーエリア：高さを自動にせず、十分な余白（margin）を確保 */
     .header-container {{
-        border-bottom: 2px solid #5d6d7e;
-        padding: 20px 10px;
-        margin-bottom: 30px;
+        width: 100%;
+        border-bottom: 3px solid #5d6d7e;
+        padding-top: 20px;
+        padding-bottom: 20px;
+        margin-bottom: 50px; /* 下との間隔を大きく開ける */
         background-color: #ffffff;
-        display: block;
-        clear: both;
     }}
+    
     .total-text {{
-        font-size: 1.1rem;
+        font-size: 1.2rem;
         color: #555;
-        display: block; /* 改行させる */
-        margin-bottom: 8px;
+        margin: 0 0 10px 0;
+        display: block;
     }}
+    
     .total-amount {{
-        font-size: 2.2rem;
+        font-size: 2.5rem; /* 数字を大きく */
         font-weight: bold;
         color: #000;
-        display: block; /* 改行させる */
+        margin: 0;
+        display: block;
         line-height: 1.2;
     }}
 
-    /* テーブル設定 */
+    /* テーブルのスタイル */
     .custom-table-container {{
         overflow-x: auto;
         width: 100%;
-        margin-top: 20px;
+        margin-top: 30px;
     }}
     .custom-table {{
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.9rem;
     }}
     .custom-table th {{
         background-color: #5d6d7e;
         color: white;
         text-align: left;
-        padding: 12px 10px;
+        padding: 15px 10px;
         white-space: nowrap;
     }}
     .custom-table td {{
         border-bottom: 1px solid #eee;
-        padding: 12px 10px;
+        padding: 15px 10px;
         background-color: white;
+        color: #333;
     }}
 </style>
 """
@@ -87,20 +90,20 @@ def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df["日付"] = pd.to_datetime(df["日付"]).dt.date
-        # 「nan」を空文字列に置き換える（VBAでいう「If IsNull Then ""」のような処理）
-        df = df.fillna("")
+        # 全ての列の nan を空欄にする
+        df = df.astype(object).fillna("")
         return df
     return pd.DataFrame(columns=["日付", "支払先", "品名・名目", "備考", "金額"])
 
 # 入力フォーム
-with st.expander("📝 新規データ入力"):
+with st.expander("📝 新規データ入力", expanded=False):
     with st.form("input_form", clear_on_submit=True):
         input_date = st.date_input("日付", date.today())
         payee = st.text_input("支払先")
         item_name = st.text_input("品名・名目")
         amount = st.number_input("金額 (円)", min_value=0, step=1)
-        memo = st.text_area("備考", height=68)
-        if st.form_submit_button("データを登録"):
+        memo = st.text_area("備考")
+        if st.form_submit_button("登録"):
             if payee and amount > 0:
                 new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount]], 
                                         columns=["日付", "支払先", "品名・名目", "備考", "金額"])
@@ -113,28 +116,37 @@ df = load_data()
 if not df.empty:
     df['年月'] = df['日付'].apply(lambda x: x.strftime('%Y年%m月'))
     selected_month = st.selectbox("表示月を選択", sorted(df['年月'].unique(), reverse=True))
-    filtered_df = df[df['年月'] == selected_month].drop(columns=['年月'])
+    filtered_df = df[df['年月'] == selected_month].copy()
     
-    # 合計表示（HTML構造を整理して重なりを防止）
-    total = pd.to_numeric(filtered_df["金額"]).sum()
+    # 金額を数値に変換（nan対策済み）
+    filtered_df["金額"] = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0)
+    total = int(filtered_df["金額"].sum())
+    
+    # 合計表示：絶対に重ならないようHTMLをシンプル化
     st.markdown(f'''
         <div class="header-container">
-            <span class="total-text">経費合計</span>
-            <span class="total-amount">{total:,} 円</span>
+            <p class="total-text">経費合計</p>
+            <p class="total-amount">{total:,} 円</p>
         </div>
     ''', unsafe_allow_html=True)
 
-    # カスタムテーブル表示
+    # テーブル表示
+    rows_html = ""
+    for _, r in filtered_df.iterrows():
+        # 金額が0なら空欄、そうでなければカンマ区切り
+        amt = f"{int(r['金額']):,}" if r['金額'] > 0 else "0"
+        rows_html += f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{amt}</td></tr>"
+
     table_html = f"""
     <div class="custom-table-container">
         <table class="custom-table">
             <thead>
                 <tr>
-                    <th>日付</th><th>支払先</th><th>品名・名目</th><th>備考</th><th>金額</th>
+                    <th>日付</th><th>支払先</th><th>品名</th><th>備考</th><th>金額</th>
                 </tr>
             </thead>
             <tbody>
-                {"".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>" for _, r in filtered_df.iterrows()])}
+                {rows_html}
             </tbody>
         </table>
     </div>
