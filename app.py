@@ -123,7 +123,7 @@ else:
 filtered_df["金額"] = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0)
 total = int(filtered_df["金額"].sum())
 
-st.markdown(f'<div class="header-box"><p class="total-t">経費合計</p><p class="total-a">{total:,} 円</p></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="header-box"><p class="total-t">合計金額</p><p class="total-a">{total:,} 円</p></div>', unsafe_allow_html=True)
 
 # 2. 入力フォーム
 st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
