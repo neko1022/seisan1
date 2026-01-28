@@ -1,49 +1,49 @@
 import streamlit as st
 import pandas as pd
 import os
+import base64
 from datetime import date
 
-# アプリの設定（ページ全体を広く使う）
+# ページ設定
 st.set_page_config(page_title="経費精算システム", layout="wide")
 
-# --- 独自デザイン（CSS）の適用 ---
-st.markdown("""
-    <style>
-    /* 全体の背景を白に */
-    .stApp {
-        background-color: white;
-    }
-    /* ヘッダー部分（合計金額など）のデザイン */
-    .custom-header {
-        border-bottom: 2px solid #5d6d7e;
-        padding-bottom: 10px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: baseline;
-    }
-    .total-label {
-        font-size: 1.2rem;
-        font-weight: bold;
-        color: #333;
-        margin-right: 20px;
-    }
-    .total-amount {
-        font-size: 2rem;
-        font-weight: bold;
-        color: #000;
-    }
-    /* 表のヘッダー色を画像に近づける */
-    thead tr th {
-        background-color: #5d6d7e !important;
-        color: white !important;
-    }
-    /* 入力フォームの枠をシンプルに */
-    div[data-testid="stExpander"] {
-        border: 1px solid #ddd;
-        border-radius: 5px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- フォントファイルを読み込むための関数 ---
+def get_base64_font(font_file):
+    with open(font_file, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# フォントの適用（GitHubにファイルを上げた状態で動きます）
+FONT_FILE = "MochiyPopOne-Regular.ttf"
+if os.path.exists(FONT_FILE):
+    font_base64 = get_base64_font(FONT_FILE)
+    font_style = f"""
+        <style>
+        @font-face {{
+            font-family: 'Mochiy Pop One';
+            src: url(data:font/ttf;base64,{font_base64}) format('truetype');
+        }}
+        /* アプリ全体のフォントを上書き */
+        html, body, [class*="css"], .stText, .stMarkdown, .stButton, div, span, h1, h2, h3, input, textarea {{
+            font-family: 'Mochiy Pop One', sans-serif !important;
+        }}
+        
+        /* 前回のデザインも維持 */
+        .stApp {{ background-color: white; }}
+        .header-container {{
+            border-bottom: 2px solid #5d6d7e;
+            padding: 10px 0;
+            margin-bottom: 30px;
+        }}
+        .total-text {{ font-size: 1.1rem; font-weight: bold; }}
+        .total-amount {{ font-size: 1.8rem; font-weight: bold; margin-left: 20px; }}
+        th {{ background-color: #5d6d7e !important; color: white !important; font-weight: normal !important; }}
+        .stButton>button {{ background-color: #5d6d7e; color: white; border-radius: 5px; }}
+        </style>
+        """
+    st.markdown(font_style, unsafe_allow_html=True)
+
+# --- 以下、これまでのロジック ---
 
 CSV_FILE = "expenses.csv"
 
@@ -54,55 +54,44 @@ def load_data():
         return df
     return pd.DataFrame(columns=["日付", "支払先", "品名・名目", "備考", "金額"])
 
-# --- データ入力（折りたたみ式） ---
-with st.expander("➕ 新規データ入力"):
+# データ入力エリア
+with st.expander("📝 新規データ入力フォーム"):
     with st.form("input_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
+        c1, c2, c3 = st.columns(3)
+        with c1:
             input_date = st.date_input("日付", date.today())
             payee = st.text_input("支払先")
-        with col2:
+        with c2:
             item_name = st.text_input("品名・名目")
-            amount = st.number_input("金額 (円)", min_value=0, step=1, value=0)
-        with col3:
-            memo = st.text_area("備考", height=100)
+            amount = st.number_input("金額 (円)", min_value=0, step=1)
+        with c3:
+            memo = st.text_area("備考", height=68)
         
-        submit_button = st.form_submit_button("登録する")
+        if st.form_submit_button("データを登録"):
+            if payee and amount > 0:
+                new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount]], 
+                                        columns=["日付", "支払先", "品名・名目", "備考", "金額"])
+                df = load_data()
+                pd.concat([df, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                st.rerun()
 
-if submit_button:
-    if payee and amount > 0:
-        new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount]], 
-                                columns=["日付", "支払先", "品名・名目", "備考", "金額"])
-        df = load_data()
-        updated_df = pd.concat([df, new_row], ignore_index=True)
-        updated_df.to_csv(CSV_FILE, index=False)
-        st.success("登録完了")
-        st.rerun() # 画面を更新して合計値を即座に反映
-
-# --- 表示エリア ---
-df_display = load_data()
-
-if not df_display.empty:
-    # 月選択
-    df_display['年月'] = df_display['日付'].apply(lambda x: x.strftime('%Y年%m月'))
-    month_list = sorted(df_display['年月'].unique(), reverse=True)
-    selected_month = st.selectbox("表示月", month_list)
+# メイン表示エリア
+df = load_data()
+if not df.empty:
+    df['年月'] = df['日付'].apply(lambda x: x.strftime('%Y年%m月'))
+    selected_month = st.selectbox("表示月を選択", sorted(df['年月'].unique(), reverse=True))
+    filtered_df = df[df['年月'] == selected_month].drop(columns=['年月'])
     
-    filtered_df = df_display[df_display['年月'] == selected_month].drop(columns=['年月'])
-    
-    # 2. 合計金額の表示（見本画像風のレイアウト）
     total = filtered_df["金額"].sum()
     st.markdown(f"""
-        <div class="custom-header">
-            <span class="total-label">経費合計：</span>
+        <div class="header-container">
+            <span class="total-text">経費合計：</span>
             <span class="total-amount">{total:,} 円</span>
         </div>
     """, unsafe_allow_html=True)
 
-    # 1. 一覧表示（見本画像に近いシンプルな表）
-    st.write(f"### {selected_month} の明細")
     st.dataframe(
-        filtered_df,
+        filtered_df[["日付", "支払先", "品名・名目", "備考", "金額"]],
         use_container_width=True,
         hide_index=True
     )
