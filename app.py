@@ -30,21 +30,10 @@ css_code = f"""
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
-    
-    /* ボタン類 */
-    .stButton>button {{ 
-        background-color: #71018C !important; 
-        color: white !important; 
-        border-radius: 25px !important; 
-        font-weight: bold !important; 
-    }}
-
-    /* テーブルデザイン */
-    .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; overflow: hidden; }}
+    .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
+    .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; }}
     .table-style th {{ background: #71018C; color: white; padding: 12px; text-align: left; font-size: 0.9rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; }}
-
-    label[data-testid="stWidgetLabel"] p {{ color: #333 !important; font-weight: bold !important; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
@@ -79,31 +68,38 @@ components.html(
     height=0,
 )
 
-# --- データ処理 ---
+# --- データ処理関数 ---
 CSV_FILE = "expenses.csv"
 COLS = ["日付", "支払先", "品名・名目", "備考", "金額"]
 
 def load_data():
     if os.path.exists(CSV_FILE):
-        df = pd.read_csv(CSV_FILE)
-        df["日付"] = pd.to_datetime(df["日付"]).dt.date
-        return df
+        try:
+            df = pd.read_csv(CSV_FILE)
+            df["日付"] = pd.to_datetime(df["日付"]).dt.date
+            return df
+        except:
+            return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
 # --- メイン画面 ---
+# データを読み込む
 df_all = load_data()
 
 # 1. 合計表示
 if not df_all.empty:
     df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
-    selected_month = st.selectbox("表示月を選択", sorted(df_all['年月'].unique(), reverse=True))
+    month_list = sorted(df_all['年月'].unique(), reverse=True)
+    selected_month = st.selectbox("表示月を選択", month_list)
+    # フィルタリング（インデックスをリセットせず保持）
     filtered_df = df_all[df_all['年月'] == selected_month].copy()
 else:
     selected_month = ""
     filtered_df = pd.DataFrame(columns=COLS)
 
-total = int(pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum())
-st.markdown(f'<div class="header-box"><p class="total-a">{total:,} 円</p></div>', unsafe_allow_html=True)
+# 合計金額の計算
+total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
+st.markdown(f'<div class="header-box"><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
 # 2. 入力フォーム
 st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
@@ -117,39 +113,59 @@ with c2:
 memo = st.text_area("備考", height=70)
 
 if st.button("登録する", use_container_width=True):
+    # 数字だけを抽出
     clean_amount = "".join(filter(str.isdigit, amount_str))
     amount_val = int(clean_amount) if clean_amount else 0
+    
     if payee and amount_val > 0:
+        # 保存用データフレーム作成（年月などの余計な列を含めない）
         new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount_val]], columns=COLS)
-        updated_df = pd.concat([df_all.drop(columns=['年月'], errors='ignore'), new_row], ignore_index=True)
+        
+        # 既存データと結合（年月列がある場合は削除してから結合）
+        if '年月' in df_all.columns:
+            df_for_save = df_all.drop(columns=['年月'])
+        else:
+            df_for_save = df_all
+            
+        updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
         updated_df.to_csv(CSV_FILE, index=False)
-        st.success("登録しました！")
-        st.rerun()
+        
+        st.success("登録完了しました！")
+        st.rerun() # 画面を強制更新して明細を表示させる
+    else:
+        st.warning("支払先と金額を入力してください。")
 
-# 3. 履歴明細（美しさを維持した削除機能）
+# 3. 履歴明細
+st.markdown("---")
 if not filtered_df.empty:
     st.write(f"### 🗓️ {selected_month} の明細")
     
-    # 削除モードの切り替えスイッチ
-    delete_mode = st.toggle("🗑️ 編集・削除モードにする")
+    # 削除モードの切り替え
+    delete_mode = st.toggle("🗑️ 編集・削除モード")
 
     if delete_mode:
-        st.warning("削除したい項目のゴミ箱ボタンを押してください。")
         for idx, row in filtered_df.iterrows():
-            cols = st.columns([0.5, 5, 1])
-            with cols[1]:
+            cols = st.columns([5, 1])
+            with cols[0]:
                 st.write(f"【{row['日付']}】 {row['支払先']} / {row['品名・名目']} / {int(row['金額']):,}円")
-            with cols[2]:
+            with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
-                    new_df = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
-                    new_df.to_csv(CSV_FILE, index=False)
-                    st.success("削除しました。")
+                    # df_allから元のインデックスで削除
+                    df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
+                    df_to_save.to_csv(CSV_FILE, index=False)
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        # 通常時の美しいテーブル表示
-        rows = "".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>" for _, r in filtered_df.iterrows()])
-        st.markdown(f'<table class="table-style"><thead><tr>{"".join([f"<th>{c}</th>" for c in COLS])}</tr></thead><tbody>{rows}</tbody></table>', unsafe_allow_html=True)
-
+        # 通常表示（HTMLテーブル）
+        rows_html = ""
+        for _, r in filtered_df.iterrows():
+            rows_html += f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>"
+        
+        st.markdown(f'''
+            <table class="table-style">
+                <thead><tr>{"".join([f"<th>{c}</th>" for c in COLS])}</tr></thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+        ''', unsafe_allow_html=True)
 else:
-    st.info("データがありません。")
+    st.info("表示できるデータがありません。上のフォームから登録してください。")
