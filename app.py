@@ -30,78 +30,82 @@ css_code = f"""
         font-family: 'Mochiy Pop One', sans-serif !important;
     }}
 
-    /* 1. 「新規データ入力」の枠（expander）と項目名（label）の重なり防止 */
+    /* 入力フォームのラベルとタイトルの重なり防止 */
     .stExpander {{
-        margin-top: 10px !important;
-        margin-bottom: 20px !important;
+        margin-top: 30px !important;
+        margin-bottom: 30px !important;
+        border: 1px solid #ddd !important;
     }}
     
-    /* 項目名（ラベル）に十分な高さを与えて、入力欄と重ならないようにする */
-    label[data-testid="stWidgetLabel"] p {{
-        font-size: 0.9rem !important;
-        line-height: 2.0 !important; /* 行間を広く */
-        padding-bottom: 5px !important;
-        margin-bottom: 0px !important;
+    /* 項目名（ラベル）の余白を極大にする */
+    label[data-testid="stWidgetLabel"] {{
+        padding-top: 20px !important;
+        padding-bottom: 10px !important;
+        display: block !important;
     }}
 
-    /* 2. ヘッダー（合計金額）の重なり解消 */
+    /* ヘッダーの重なり解消 */
     .header-container {{
         width: 100%;
         border-bottom: 3px solid #5d6d7e;
-        padding: 25px 10px !important; /* 余白をさらに拡大 */
-        margin-bottom: 40px !important;
-        background-color: #ffffff;
+        padding: 30px 10px !important;
+        margin-bottom: 50px !important;
     }}
     
-    .total-text {{
-        font-size: 1.0rem;
-        color: #555;
-        margin: 0 0 15px 0 !important;
-        display: block;
-    }}
-    
-    .total-amount {{
-        font-size: 2.2rem;
-        font-weight: bold;
-        color: #000;
-        margin: 0 !important;
-        display: block;
-    }}
+    .total-text {{ font-size: 1.1rem; display: block; margin-bottom: 15px !important; }}
+    .total-amount {{ font-size: 2.5rem; font-weight: bold; display: block; }}
 
     /* テーブル設定 */
-    .custom-table-container {{
-        overflow-x: auto;
-        width: 100%;
-        margin-top: 30px;
-    }}
-    .custom-table {{
-        width: 100%;
-        border-collapse: collapse;
-    }}
-    .custom-table th {{
-        background-color: #5d6d7e;
-        color: white;
-        text-align: left;
-        padding: 15px 10px;
-        white-space: nowrap;
-    }}
-    .custom-table td {{
-        border-bottom: 1px solid #eee;
-        padding: 15px 10px;
-        background-color: white;
-        color: #333;
-    }}
+    .custom-table-container {{ overflow-x: auto; width: 100%; margin-top: 40px; }}
+    .custom-table {{ width: 100%; border-collapse: collapse; }}
+    .custom-table th {{ background-color: #5d6d7e; color: white; padding: 15px; text-align: left; }}
+    .custom-table td {{ border-bottom: 1px solid #eee; padding: 15px; background-color: white; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
 # --- データ処理 ---
 CSV_FILE = "expenses.csv"
+COLS = ["日付", "支払先", "品名・名目", "備考", "金額"]
 
 def load_data():
     if os.path.exists(CSV_FILE):
         df = pd.read_csv(CSV_FILE)
         df["日付"] = pd.to_datetime(df["日付"]).dt.date
-        df = df.astype(object).fillna("") # nan排除
-        return df
-    return pd.DataFrame(columns=["日付", "支払先", "品名・名
+        return df.astype(object).fillna("")
+    return pd.DataFrame(columns=COLS)
+
+# --- 入力フォーム ---
+st.write("### ") # タイトルの上に空行を入れて重なり防止
+with st.expander("📝 新規データ入力フォーム", expanded=False):
+    with st.form("input_form", clear_on_submit=True):
+        input_date = st.date_input("日付", date.today())
+        payee = st.text_input("支払先")
+        item_name = st.text_input("品名・名目")
+        amount = st.number_input("金額 (円)", min_value=0, step=1)
+        memo = st.text_area("備考")
+        
+        if st.form_submit_button("登録"):
+            if payee and amount > 0:
+                new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount]], columns=COLS)
+                df = load_data()
+                pd.concat([df, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                st.rerun()
+
+# --- 表示エリア ---
+df = load_data()
+if not df.empty:
+    df['年月'] = df['日付'].apply(lambda x: x.strftime('%Y年%m月'))
+    selected_month = st.selectbox("表示月を選択", sorted(df['年月'].unique(), reverse=True))
+    filtered_df = df[df['年月'] == selected_month].copy()
+    
+    filtered_df["金額"] = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0)
+    total = int(filtered_df["金額"].sum())
+    
+    st.markdown(f'<div class="header-container"><p class="total-text">経費合計</p><p class="total-amount">{total:,} 円</p></div>', unsafe_allow_html=True)
+
+    rows_html = "".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>" for _, r in filtered_df.iterrows()])
+    table_html = f'<div class="custom-table-container"><table class="custom-table"><thead><tr>{"".join([f"<th>{c}</th>" for c in COLS])}</tr></thead><tbody>{rows_html}</tbody></table></div>'
+    st.markdown(table_html, unsafe_allow_html=True)
+else:
+    st.info("データがありません。")
