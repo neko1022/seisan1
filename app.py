@@ -9,42 +9,65 @@ st.set_page_config(page_title="経費精算システム", layout="wide")
 
 # --- フォントファイルを読み込むための関数 ---
 def get_base64_font(font_file):
-    with open(font_file, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
+    if os.path.exists(font_file):
+        with open(font_file, "rb") as f:
+            data = f.read()
+        return base64.b64encode(data).decode()
+    return None
 
-# フォントの適用（GitHubにファイルを上げた状態で動きます）
-FONT_FILE = "MochiyPopOne-Regular.ttf"
-if os.path.exists(FONT_FILE):
-    font_base64 = get_base64_font(FONT_FILE)
-    font_style = f"""
-        <style>
-        @font-face {{
-            font-family: 'Mochiy Pop One';
-            src: url(data:font/ttf;base64,{font_base64}) format('truetype');
-        }}
-        /* アプリ全体のフォントを上書き */
-        html, body, [class*="css"], .stText, .stMarkdown, .stButton, div, span, h1, h2, h3, input, textarea {{
-            font-family: 'Mochiy Pop One', sans-serif !important;
-        }}
-        
-        /* 前回のデザインも維持 */
-        .stApp {{ background-color: white; }}
-        .header-container {{
-            border-bottom: 2px solid #5d6d7e;
-            padding: 10px 0;
-            margin-bottom: 30px;
-        }}
-        .total-text {{ font-size: 1.1rem; font-weight: bold; }}
-        .total-amount {{ font-size: 1.8rem; font-weight: bold; margin-left: 20px; }}
-        th {{ background-color: #5d6d7e !important; color: white !important; font-weight: normal !important; }}
-        .stButton>button {{ background-color: #5d6d7e; color: white; border-radius: 5px; }}
-        </style>
-        """
-    st.markdown(font_style, unsafe_allow_html=True)
+font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- 以下、これまでのロジック ---
+# --- スマホ最適化＆フォント強制適用のCSS ---
+css_code = f"""
+<style>
+    @font-face {{
+        font-family: 'Mochiy Pop One';
+        src: url(data:font/ttf;base64,{font_base64}) format('truetype');
+    }}
 
+    /* 全体にフォントを適用 */
+    html, body, [class*="css"], div, span, p, input, select, textarea, button {{
+        font-family: 'Mochiy Pop One', sans-serif !important;
+    }}
+
+    /* 上段の重なり解消と余白 */
+    .header-container {{
+        border-bottom: 2px solid #5d6d7e;
+        padding: 15px 5px;
+        margin: 20px 0;
+        background-color: white;
+    }}
+    .total-text {{ font-size: 1rem; color: #333; display: block; }}
+    .total-amount {{ font-size: 1.8rem; font-weight: bold; color: #000; display: block; margin-top: 5px; }}
+
+    /* スマホでも項目が消えない独自テーブル設定 */
+    .custom-table-container {{
+        overflow-x: auto; /* 横スクロールを許可 */
+        width: 100%;
+    }}
+    .custom-table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Mochiy Pop One', sans-serif !important;
+        font-size: 0.85rem;
+    }}
+    .custom-table th {{
+        background-color: #5d6d7e;
+        color: white;
+        text-align: left;
+        padding: 10px;
+        white-space: nowrap;
+    }}
+    .custom-table td {{
+        border-bottom: 1px solid #eee;
+        padding: 10px;
+        background-color: white;
+    }}
+</style>
+"""
+st.markdown(css_code, unsafe_allow_html=True)
+
+# --- データ処理 ---
 CSV_FILE = "expenses.csv"
 
 def load_data():
@@ -54,19 +77,14 @@ def load_data():
         return df
     return pd.DataFrame(columns=["日付", "支払先", "品名・名目", "備考", "金額"])
 
-# データ入力エリア
-with st.expander("📝 新規データ入力フォーム"):
+# 入力フォーム
+with st.expander("📝 新規データ入力"):
     with st.form("input_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            input_date = st.date_input("日付", date.today())
-            payee = st.text_input("支払先")
-        with c2:
-            item_name = st.text_input("品名・名目")
-            amount = st.number_input("金額 (円)", min_value=0, step=1)
-        with c3:
-            memo = st.text_area("備考", height=68)
-        
+        input_date = st.date_input("日付", date.today())
+        payee = st.text_input("支払先")
+        item_name = st.text_input("品名・名目")
+        amount = st.number_input("金額 (円)", min_value=0, step=1)
+        memo = st.text_area("備考", height=68)
         if st.form_submit_button("データを登録"):
             if payee and amount > 0:
                 new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount]], 
@@ -75,25 +93,32 @@ with st.expander("📝 新規データ入力フォーム"):
                 pd.concat([df, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
                 st.rerun()
 
-# メイン表示エリア
+# 表示エリア
 df = load_data()
 if not df.empty:
     df['年月'] = df['日付'].apply(lambda x: x.strftime('%Y年%m月'))
-    selected_month = st.selectbox("表示月を選択", sorted(df['年月'].unique(), reverse=True))
+    selected_month = st.selectbox("表示月", sorted(df['年月'].unique(), reverse=True))
     filtered_df = df[df['年月'] == selected_month].drop(columns=['年月'])
     
+    # 合計表示
     total = filtered_df["金額"].sum()
-    st.markdown(f"""
-        <div class="header-container">
-            <span class="total-text">経費合計：</span>
-            <span class="total-amount">{total:,} 円</span>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'<div class="header-container"><span class="total-text">経費合計</span><span class="total-amount">{total:,} 円</span></div>', unsafe_allow_html=True)
 
-    st.dataframe(
-        filtered_df[["日付", "支払先", "品名・名目", "備考", "金額"]],
-        use_container_width=True,
-        hide_index=True
-    )
+    # 項目が絶対に消えないカスタムテーブル表示
+    table_html = f"""
+    <div class="custom-table-container">
+        <table class="custom-table">
+            <thead>
+                <tr>
+                    <th>日付</th><th>支払先</th><th>品名・名目</th><th>備考</th><th>金額</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join([f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{r['金額']:,}</td></tr>" for _, r in filtered_df.iterrows()])}
+            </tbody>
+        </table>
+    </div>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
 else:
     st.info("データがありません。")
