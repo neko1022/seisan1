@@ -77,7 +77,6 @@ def load_data():
         try:
             df = pd.read_csv(CSV_FILE)
             df["日付"] = pd.to_datetime(df["日付"]).dt.date
-            # 強力に nan を空欄に置き換える
             return df.fillna("")
         except:
             return pd.DataFrame(columns=COLS)
@@ -114,16 +113,11 @@ if st.button("登録する", use_container_width=True):
     clean_amount = "".join(filter(str.isdigit, amount_str))
     amount_val = int(clean_amount) if clean_amount else 0
     
-    # 支払先や名目が空でも、金額さえあれば登録を許可する
     if amount_val > 0:
         new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount_val]], columns=COLS)
-        
-        # 保存前に「年月」列を排除
         df_for_save = df_all.drop(columns=['年月'], errors='ignore')
         updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
-        # CSV保存時にも nan を空にして保存
         updated_df.fillna("").to_csv(CSV_FILE, index=False)
-        
         st.success("登録完了しました！")
         st.rerun()
     else:
@@ -140,9 +134,9 @@ if not filtered_df.empty:
         for idx, row in filtered_df.iterrows():
             cols = st.columns([5, 1])
             with cols[0]:
-                # 表示の際も nan が出ないよう再確認
                 p = row['支払先'] if row['支払先'] != "" else "(未入力)"
                 i = row['品名・名目'] if row['品名・名目'] != "" else "(未入力)"
+                # 削除モードの金額にも「円」を追加
                 st.write(f"【{row['日付']}】 {p} / {i} / {int(row['金額']):,}円")
             with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
@@ -151,14 +145,14 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        # 通常表示
+        # 通常表示（金額に「円」を追加）
         rows_html = ""
         for _, r in filtered_df.iterrows():
-            # 個別に nan 判定をして確実に空欄にする
             f_payee = r['支払先'] if pd.notna(r['支払先']) else ""
             f_item = r['品名・名目'] if pd.notna(r['品名・名目']) else ""
             f_memo = r['備考'] if pd.notna(r['備考']) else ""
-            rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,}</td></tr>"
+            # 金額セルに「円」を追加
+            rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,} 円</td></tr>"
         
         st.markdown(f'''
             <table class="table-style">
