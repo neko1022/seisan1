@@ -77,21 +77,19 @@ def load_data():
         try:
             df = pd.read_csv(CSV_FILE)
             df["日付"] = pd.to_datetime(df["日付"]).dt.date
-            return df
+            # 強力に nan を空欄に置き換える
+            return df.fillna("")
         except:
             return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
 # --- メイン画面 ---
-# データを読み込む
 df_all = load_data()
 
-# 1. 合計表示
 if not df_all.empty:
     df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
     month_list = sorted(df_all['年月'].unique(), reverse=True)
     selected_month = st.selectbox("表示月を選択", month_list)
-    # フィルタリング（インデックスをリセットせず保持）
     filtered_df = df_all[df_all['年月'] == selected_month].copy()
 else:
     selected_month = ""
@@ -113,53 +111,54 @@ with c2:
 memo = st.text_area("備考", height=70)
 
 if st.button("登録する", use_container_width=True):
-    # 数字だけを抽出
     clean_amount = "".join(filter(str.isdigit, amount_str))
     amount_val = int(clean_amount) if clean_amount else 0
     
-    if payee and amount_val > 0:
-        # 保存用データフレーム作成（年月などの余計な列を含めない）
+    # 支払先や名目が空でも、金額さえあれば登録を許可する
+    if amount_val > 0:
         new_row = pd.DataFrame([[input_date, payee, item_name, memo, amount_val]], columns=COLS)
         
-        # 既存データと結合（年月列がある場合は削除してから結合）
-        if '年月' in df_all.columns:
-            df_for_save = df_all.drop(columns=['年月'])
-        else:
-            df_for_save = df_all
-            
+        # 保存前に「年月」列を排除
+        df_for_save = df_all.drop(columns=['年月'], errors='ignore')
         updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
-        updated_df.to_csv(CSV_FILE, index=False)
+        # CSV保存時にも nan を空にして保存
+        updated_df.fillna("").to_csv(CSV_FILE, index=False)
         
         st.success("登録完了しました！")
-        st.rerun() # 画面を強制更新して明細を表示させる
+        st.rerun()
     else:
-        st.warning("支払先と金額を入力してください。")
+        st.warning("金額を入力してください。")
 
 # 3. 履歴明細
 st.markdown("---")
 if not filtered_df.empty:
-    st.write(f"### 🗓️ {selected_month} の明細")
+    st.write(f"### {selected_month} の明細")
     
-    # 削除モードの切り替え
     delete_mode = st.toggle("🗑️ 編集・削除モード")
 
     if delete_mode:
         for idx, row in filtered_df.iterrows():
             cols = st.columns([5, 1])
             with cols[0]:
-                st.write(f"【{row['日付']}】 {row['支払先']} / {row['品名・名目']} / {int(row['金額']):,}円")
+                # 表示の際も nan が出ないよう再確認
+                p = row['支払先'] if row['支払先'] != "" else "(未入力)"
+                i = row['品名・名目'] if row['品名・名目'] != "" else "(未入力)"
+                st.write(f"【{row['日付']}】 {p} / {i} / {int(row['金額']):,}円")
             with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
-                    # df_allから元のインデックスで削除
                     df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
-                    df_to_save.to_csv(CSV_FILE, index=False)
+                    df_to_save.fillna("").to_csv(CSV_FILE, index=False)
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        # 通常表示（HTMLテーブル）
+        # 通常表示
         rows_html = ""
         for _, r in filtered_df.iterrows():
-            rows_html += f"<tr><td>{r['日付']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}</td></tr>"
+            # 個別に nan 判定をして確実に空欄にする
+            f_payee = r['支払先'] if pd.notna(r['支払先']) else ""
+            f_item = r['品名・名目'] if pd.notna(r['品名・名目']) else ""
+            f_memo = r['備考'] if pd.notna(r['備考']) else ""
+            rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,}</td></tr>"
         
         st.markdown(f'''
             <table class="table-style">
@@ -168,4 +167,4 @@ if not filtered_df.empty:
             </table>
         ''', unsafe_allow_html=True)
 else:
-    st.info("表示できるデータがありません。上のフォームから登録してください。")
+    st.info("データがありません。")
