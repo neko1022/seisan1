@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 # ページ設定
 st.set_page_config(page_title="経費精算システム", layout="wide")
 
-# --- フォント・CSS設定（変更なし） ---
+# --- フォント読み込み ---
 def get_base64_font(font_file):
     if os.path.exists(font_file):
         with open(font_file, "rb") as f:
@@ -18,6 +18,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
+# --- デザイン（CSS） ---
 css_code = f"""
 <style>
     @font-face {{
@@ -44,7 +45,7 @@ css_code = f"""
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理関数 ---
+# --- データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -62,15 +63,22 @@ def load_data():
 
 df_all = load_data()
 
-# --- 1. 共通の表示・登録用設定 ---
-# 画面最上部に切り替えスイッチ
+# --- 過去の入力履歴を取得する関数 ---
+def get_suggestions(column_name):
+    if column_name in df_all.columns:
+        # 重複を除去し、空文字を除いてリスト化
+        suggestions = sorted([str(x) for x in df_all[column_name].unique() if x != ""])
+        return suggestions
+    return []
+
+# --- 画面構成 ---
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
-    # --- 管理者画面（省略なし） ---
-    pwd = st.text_input("パスワードを入力してください", type="password")
+    # --- 管理者画面 ---
+    pwd = st.text_input("パスワード", type="password")
     if pwd == "1234":
-        st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
+        st.markdown('<div class="form-title">📊 全体集計パネル</div>', unsafe_allow_html=True)
         if not df_all.empty:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
             target_month = st.selectbox("集計月を選択", sorted(df_all['年月'].unique(), reverse=True))
@@ -90,9 +98,8 @@ else:
     # --- 個人申請モード（統合版） ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        # 申請者のリスト（ここを編集して名前を増やす）
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
-        selected_user = st.selectbox("あなたの名前を選択してください", name_list)
+        selected_user = st.selectbox("あなたの名前を選択", name_list)
     with col_s2:
         if not df_all.empty:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
@@ -106,47 +113,69 @@ else:
     total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
     st.markdown(f'''<div class="header-box"><p class="total-label">{selected_user} さんの合計 ({selected_month})</p><p class="total-a">{int(total_val):,} 円</p></div>''', unsafe_allow_html=True)
 
-    # 入力フォーム（名前の選択欄を削除しました！）
+    # --- 新規データ入力（履歴選択機能付き） ---
     st.markdown(f'<div class="form-title">📝 {selected_user} さんの新規入力</div>', unsafe_allow_html=True)
+    
     c1, c2 = st.columns(2)
     with c1:
         input_date = st.date_input("日付", date.today())
-        payee = st.text_input("支払先", placeholder="例：〇〇商事")
+        # 過去の履歴をリスト化
+        payee_list = get_suggestions("支払先")
+        payee = st.selectbox("支払先 (過去の履歴から選択)", [""] + payee_list)
+        if payee == "": # 履歴にない場合は手入力
+            payee = st.text_input("支払先を手入力", placeholder="例：〇〇商事")
+            
     with c2:
-        item_name = st.text_input("品名・名目", placeholder="例：交通費")
+        item_list = get_suggestions("品名・名目")
+        item_name_sel = st.selectbox("品名・名目 (履歴から選択)", [""] + item_list)
+        if item_name_sel == "":
+            item_name = st.text_input("品名・名目を手入力", placeholder="例：交通費")
+        else:
+            item_name = item_name_sel
+            
         amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
-    memo = st.text_area("備考", height=70)
+
+    memo_list = get_suggestions("備考")
+    memo_sel = st.selectbox("備考 (履歴から選択)", [""] + memo_list)
+    if memo_sel == "":
+        memo = st.text_area("備考を手入力", height=70)
+    else:
+        memo = memo_sel
 
     if st.button("登録する", use_container_width=True):
         clean_amount = "".join(filter(str.isdigit, amount_str))
         amount_val = int(clean_amount) if clean_amount else 0
-        if amount_val > 0:
-            # selected_user（上で選んだ名前）をそのまま使って保存
+        if amount_val > 0 and payee != "" and item_name != "":
             new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
             df_for_save = df_all.drop(columns=['年月'], errors='ignore')
             pd.concat([df_for_save, new_row], ignore_index=True).fillna("").to_csv(CSV_FILE, index=False)
             st.success("登録完了！")
             st.rerun()
+        else:
+            st.warning("支払先、品名、金額を正しく入力してください。")
 
+    # 明細履歴
     st.markdown("---")
     if not filtered_df.empty:
         st.write(f"### 🗓️ {selected_user} さんの明細履歴")
-        delete_mode = st.toggle("🗑️ 編集・削除モード")
+        delete_mode = st.toggle("🗑️ 履歴の削除・管理モード")
         if delete_mode:
             for idx, row in filtered_df.iterrows():
                 cols = st.columns([5, 1])
                 with cols[0]:
-                    st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
+                    st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {row['品名・名目']} / {int(row['金額']):,}円")
                 with cols[1]:
                     if st.button("🗑️", key=f"del_{idx}"):
-                        df_all.drop(idx).drop(columns=['年月'], errors='ignore').to_csv(CSV_FILE, index=False)
+                        # ここで削除すると、次回の選択肢からも自動的に消えます
+                        df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
+                        df_to_save.fillna("").to_csv(CSV_FILE, index=False)
                         st.rerun()
                 st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
         else:
             rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
             st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# テンキー対応等のJS（省略なし）
+# JS
 components.html("""
     <script>
     const doc = window.parent.document;
@@ -159,15 +188,5 @@ components.html("""
             }
         });
     }, 1000);
-    doc.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            const all = Array.from(doc.querySelectorAll('input, textarea, select, button'));
-            const idx = all.indexOf(doc.activeElement);
-            if (idx > -1 && idx < all.length - 1) {
-                all[idx + 1].focus();
-                e.preventDefault();
-            }
-        }
-    });
     </script>
 """, height=0)
