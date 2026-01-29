@@ -43,6 +43,7 @@ css_code = f"""
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
 
+    /* PC・スマホ共通：入力候補リストの見た目 */
     .custom-suggestion-list {{
         position: absolute;
         z-index: 1000;
@@ -87,11 +88,6 @@ df_all = load_data()
 def get_h(col):
     return sorted([str(x) for x in df_all[col].unique() if str(x).strip() != ""])
 
-# --- ★重要：ここで先に履歴リストを定義してエラーを防ぐ ---
-payee_h = get_h("支払先")
-item_h = get_h("品名・名目")
-memo_h = get_h("備考")
-
 # --- 画面構成 ---
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
@@ -105,10 +101,7 @@ if is_admin:
             admin_df = df_all[df_all['年月'] == target_month].copy()
             st.table(admin_df.groupby("名前")["金額"].sum().reset_index())
             st.download_button("CSV保存", admin_df.to_csv(index=False).encode('utf_8_sig'), f"sum_{target_month}.csv")
-    elif pwd != "":
-        st.error("パスワードが違います")
 else:
-    # --- 個人申請モード ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -124,6 +117,10 @@ else:
 
     st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
     
+    payee_h = get_h("支払先")
+    item_h = get_h("品名・名目")
+    memo_h = get_h("備考")
+
     c1, c2 = st.columns(2)
     with c1:
         input_date = st.date_input("日付", date.today())
@@ -157,10 +154,10 @@ else:
                         df_all.drop(idx).drop(columns=['年月'], errors='ignore').to_csv(CSV_FILE, index=False)
                         st.rerun()
         else:
-            rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}】</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
+            rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
             st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# --- 改良版JavaScript：ここでも payee_h 等を参照するので、Python側の定義順が重要でした ---
+# --- 改良版JavaScript: 入力欄に独自のサジェスト機能を追加 ---
 history_js = f"""
     <script>
     const doc = window.parent.document;
@@ -171,6 +168,7 @@ history_js = f"""
     }};
 
     function createList(input, list) {{
+        // すでにリストがあれば削除
         const oldList = input.parentElement.querySelector('.custom-suggestion-list');
         if (oldList) oldList.remove();
 
@@ -180,8 +178,9 @@ history_js = f"""
             const itemDiv = doc.createElement('div');
             itemDiv.className = 'suggestion-item';
             itemDiv.innerText = item;
-            itemDiv.onmousedown = (e) => {{
+            itemDiv.onmousedown = (e) => {{ // clickだとfocusoutが先に走るのでmousedown
                 input.value = item;
+                // Streamlitに値を伝えるためのイベント発火
                 input.dispatchEvent(new Event('input', {{ bubbles: true }}));
                 div.style.display = 'none';
             }};
@@ -202,6 +201,7 @@ history_js = f"""
                 input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
                 input.dataset.hasList = "true";
             }}
+            // テンキー対応
             if (label && label.includes('金額')) {{
                 input.type = 'number';
                 input.inputMode = 'numeric';
