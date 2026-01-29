@@ -42,35 +42,21 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* ★ チェックボックスとラベルを完全に同じラインに揃えるCSS ★ */
-    .label-row {{
-        display: flex;
-        align-items: center; /* 垂直方向の中央揃え */
-        height: 2.5rem;      /* ラベル行の高さを固定 */
-        gap: 5px;            /* 文字とチェックボックスの隙間 */
-    }}
-    .custom-label {{
-        font-weight: bold;
-        font-size: 0.9rem;
-        color: #31333F;
-    }}
-    /* Streamlit標準のチェックボックス周りの余分な余白をカット */
-    div[data-testid="stCheckbox"] {{
-        margin-top: 0px !important;
-        margin-bottom: 0px !important;
-        display: flex;
-        align-items: center;
-    }}
-    div[data-testid="stCheckbox"] label {{
-        padding-top: 0px !important;
-        padding-bottom: 0px !important;
-        margin-bottom: 0px !important;
+    .col-date {{ width: 55px; }}
+    .col-payee {{ width: 22%; }}
+    .col-item {{ width: 22%; }}
+    .col-memo {{ width: auto; }}
+    .col-amount {{ width: 85px; }}
+
+    /* チェックボックスの縦位置微調整 */
+    [data-testid="stCheckbox"] {{
+        margin-top: 25px !important;
     }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理（安定版） ---
+# --- 安定版データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -78,26 +64,29 @@ def load_data():
     if os.path.exists(CSV_FILE):
         try:
             df = pd.read_csv(CSV_FILE)
-            if "名前" not in df.columns: df.insert(0, "名前", "山田太郎")
+            if "名前" not in df.columns:
+                df.insert(0, "名前", "山田太郎")
             df["日付"] = pd.to_datetime(df["日付"]).dt.date
             return df.fillna("")
-        except: return pd.DataFrame(columns=COLS)
+        except:
+            return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
 df_all = load_data()
 
-def get_unique_history(column_name):
-    if column_name in df_all.columns:
-        return sorted([str(x) for x in df_all[column_name].unique() if str(x).strip() != ""])
+# 履歴取得用関数
+def get_h(col):
+    if col in df_all.columns:
+        return sorted([str(x) for x in df_all[col].unique() if str(x).strip() != ""])
     return []
 
-USER_PASS, ADMIN_PASS = "0000", "1234"
+USER_PASS = "0000" 
+ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
-    # --- 管理者モード（前回と同じ） ---
     pwd = st.text_input("管理者パスワード", type="password")
     if pwd == ADMIN_PASS:
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
@@ -105,7 +94,9 @@ if is_admin:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
             target_month = st.selectbox("集計月", sorted(df_all['年月'].unique(), reverse=True))
             admin_df = df_all[df_all['年月'] == target_month].copy()
-            st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 全員合計</p><p class="total-a">{int(admin_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
+            total_admin = admin_df["金額"].sum()
+            st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 全員合計</p><p class="total-a">{int(total_admin):,} 円</p></div>', unsafe_allow_html=True)
+            
             user_summary = admin_df.groupby("名前")["金額"].sum().reset_index()
             for idx, row in user_summary.iterrows():
                 c_switch, c_name, c_amt = st.columns([1, 2, 2])
@@ -115,13 +106,15 @@ if is_admin:
                 if show_detail:
                     u_detail = admin_df[admin_df["名前"] == row["名前"]].copy()
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in u_detail.iterrows()])
-                    st.markdown(f'<table class="table-style"><thead><tr><th>日付</th><th>支払先</th><th>品名</th><th>備考</th><th>金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
+                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
                 st.markdown("<hr style='margin:5px 0; border:0.5px solid #eee;'>", unsafe_allow_html=True)
-            st.download_button("CSV保存", admin_df.to_csv(index=False).encode('utf_8_sig'), f"sum_{target_month}.csv")
-    elif pwd != "": st.error("パスワード不一致")
-
+            
+            csv_data = admin_df.drop(columns=['年月']).to_csv(index=False).encode('utf_8_sig')
+            st.download_button(label="📥 CSVダウンロード", data=csv_data, file_name=f"集計_{target_month}.csv", mime='text/csv')
+    elif pwd != "":
+        st.error("パスワードが違います")
 else:
-    # --- 個人申請モード（レイアウト修正版） ---
+    # --- 個人申請モード ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -129,60 +122,69 @@ else:
     
     if selected_user != "選択してください":
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
+        
         if user_pwd == USER_PASS:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
-            with col_s2: selected_month = st.selectbox("表示月", month_list) if month_list else ""
             
-            filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if selected_month else pd.DataFrame(columns=COLS)
-            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(filtered_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
+            with col_s2:
+                selected_month = st.selectbox("表示月", month_list) if month_list else ""
+            
+            if selected_month:
+                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
+            else:
+                filtered_df = pd.DataFrame(columns=COLS)
 
-            st.markdown('<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
+            total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
+            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
+
+            st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             
-            # --- 1段目: 日付 と 品名 ---
+            # --- 入力エリア ---
             c1, c2 = st.columns(2)
             with c1:
-                st.markdown('<div class="label-row"><span class="custom-label">日付</span></div>', unsafe_allow_html=True)
-                input_date = st.date_input("日付", date.today(), label_visibility="collapsed")
-            with c2:
-                # 品名ラベルとチェックボックスを強制横並び
-                st.markdown('<div class="label-row"><span class="custom-label">品名・名目 (履歴から選択)</span>', unsafe_allow_html=True)
-                use_item_h = st.checkbox("", key="h_item", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
+                input_date = st.date_input("日付", date.today())
                 
-                if use_item_h:
-                    item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"), label_visibility="collapsed")
-                else:
-                    item_name = st.text_input("品名入力", placeholder="例：交通費", label_visibility="collapsed")
-
-            # --- 2段目: 支払先 と 金額 ---
-            c3, c4 = st.columns(2)
-            with c3:
-                # 支払先ラベルとチェックボックスを強制横並び
-                st.markdown('<div class="label-row"><span class="custom-label">支払先 (履歴から選択)</span>', unsafe_allow_html=True)
-                use_payee_h = st.checkbox("", key="h_pay", label_visibility="collapsed")
-                st.markdown('</div>', unsafe_allow_html=True)
+                # 支払先：タイトルとスイッチを横並びに
+                sub_c1, sub_c2 = st.columns([2, 1])
+                with sub_c1:
+                    st.write("**支払先**")
+                with sub_c2:
+                    use_payee_h = st.checkbox("履歴選択", key="use_p_h")
                 
                 if use_payee_h:
-                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"), label_visibility="collapsed")
+                    payee = st.selectbox("支払先(履歴)", [""] + get_h("支払先"), label_visibility="collapsed")
                 else:
-                    payee = st.text_input("支払先入力", placeholder="例：〇〇商事", label_visibility="collapsed")
-            with c4:
-                st.markdown('<div class="label-row"><span class="custom-label">金額 (円)</span></div>', unsafe_allow_html=True)
-                amount_str = st.text_input("金額入力", placeholder="数字を入力", label_visibility="collapsed")
+                    payee = st.text_input("支払先(手入力)", placeholder="例：〇〇商事", label_visibility="collapsed")
+                    
+            with c2:
+                # 品名・名目：タイトルとスイッチを横並びに
+                sub_c3, sub_c4 = st.columns([2, 1])
+                with sub_c3:
+                    st.write("**品名・名目**")
+                with sub_c4:
+                    use_item_h = st.checkbox("履歴選択", key="use_i_h")
+                
+                if use_item_h:
+                    item_name = st.selectbox("品名(履歴)", [""] + get_h("品名・名目"), label_visibility="collapsed")
+                else:
+                    item_name = st.text_input("品名(手入力)", placeholder="例：交通費", label_visibility="collapsed")
+                
+                amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
             
-            st.markdown('<div class="label-row"><span class="custom-label">備考</span></div>', unsafe_allow_html=True)
-            memo = st.text_area("備考入力", placeholder="補足があれば入力", height=70, label_visibility="collapsed")
+            memo = st.text_area("備考", placeholder="補足があれば入力", height=70)
 
             if st.button("登録する", use_container_width=True):
                 clean_amount = "".join(filter(str.isdigit, amount_str))
                 amount_val = int(clean_amount) if clean_amount else 0
                 if amount_val > 0:
                     new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
-                    pd.concat([df_all.drop(columns=['年月'], errors='ignore'), new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                    df_for_save = df_all.drop(columns=['年月'], errors='ignore')
+                    pd.concat([df_for_save, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
                     st.success("登録完了！")
                     st.rerun()
-                else: st.warning("金額を入力してください。")
+                else:
+                    st.warning("金額を入力してください。")
 
             st.markdown("---")
             if not filtered_df.empty:
@@ -198,15 +200,15 @@ else:
                                 st.rerun()
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-                    st.markdown(f'<table class="table-style"><thead><tr><th>日付</th><th>支払先</th><th>品名</th><th>備考</th><th>金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-        elif user_pwd != "": st.error("パスワード不一致")
+                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# JS: テンキー対応
+# JavaScript
 components.html("""
     <script>
     const doc = window.parent.document;
     setInterval(() => {
-        doc.querySelectorAll('input').forEach(input => {
+        const inputs = doc.querySelectorAll('input');
+        inputs.forEach(input => {
             if (input.ariaLabel && input.ariaLabel.includes('金額')) {
                 input.type = 'number';
                 input.inputMode = 'numeric';
