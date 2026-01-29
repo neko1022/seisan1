@@ -59,7 +59,7 @@ css_code = f"""
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理 ---
+# --- 安定版データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -75,6 +75,7 @@ def load_data():
             return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
+# アプリ起動時にデータを読み込む
 df_all = load_data()
 
 def get_h(col):
@@ -84,7 +85,6 @@ payee_h = get_h("支払先")
 item_h = get_h("品名・名目")
 memo_h = get_h("備考")
 
-# --- パスワード設定 (暫定) ---
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
@@ -92,6 +92,7 @@ ADMIN_PASS = "1234"
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
+    # --- 管理者画面（変更なし） ---
     pwd = st.text_input("管理者パスワード", type="password")
     if pwd == ADMIN_PASS:
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
@@ -119,7 +120,7 @@ if is_admin:
     elif pwd != "":
         st.error("パスワードが違います")
 else:
-    # --- 個人申請モード ---
+    # --- 個人申請モード（不具合修正版） ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -129,16 +130,23 @@ else:
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
         
         if user_pwd == USER_PASS:
+            # ここで最新のデータをフィルタリング
+            df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
+            month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
+            
             with col_s2:
-                df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
-                month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
                 selected_month = st.selectbox("表示月", month_list) if month_list else ""
-                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if selected_month else pd.DataFrame(columns=COLS)
+            
+            # フィルタリング条件を確実に適用
+            if selected_month:
+                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
+            else:
+                filtered_df = pd.DataFrame(columns=COLS)
 
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 入力フォーム
+            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -153,12 +161,17 @@ else:
                 clean_amount = "".join(filter(str.isdigit, amount_str))
                 amount_val = int(clean_amount) if clean_amount else 0
                 if amount_val > 0 and payee != "" and item_name != "":
+                    # 保存用のデータフレーム作成
                     new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
-                    pd.concat([df_all.drop(columns=['年月'], errors='ignore'), new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                    # 既存データと結合して保存（年月カラムは除外）
+                    df_for_save = df_all.drop(columns=['年月'], errors='ignore')
+                    updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
+                    updated_df.to_csv(CSV_FILE, index=False)
                     st.success("登録完了！")
-                    st.rerun()
+                    st.rerun() # 画面をリロードして反映させる
+                else:
+                    st.warning("項目を正しく入力してください。")
 
-            # 明細
             st.markdown("---")
             if not filtered_df.empty:
                 st.write("### 🗓️ 明細履歴")
@@ -166,57 +179,4 @@ else:
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
                         cols = st.columns([5, 1])
-                        with cols[0]: st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
-                        with cols[1]:
-                            if st.button("🗑️", key=f"del_{idx}"):
-                                df_all.drop(idx).drop(columns=['年月'], errors='ignore').to_csv(CSV_FILE, index=False)
-                                st.rerun()
-                else:
-                    rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-        elif user_pwd != "":
-            st.error("パスワードが違います")
-    else:
-        st.info("名前を選択して、パスワードを入力してください。")
-
-# --- JavaScript ---
-history_js = f"""
-    <script>
-    const doc = window.parent.document;
-    const historyData = {{ "支払先": {payee_h}, "品名・名目": {item_h}, "備考": {memo_h} }};
-    function createList(input, list) {{
-        const oldList = input.parentElement.querySelector('.custom-suggestion-list');
-        if (oldList) oldList.remove();
-        const div = doc.createElement('div');
-        div.className = 'custom-suggestion-list';
-        list.forEach(item => {{
-            const itemDiv = doc.createElement('div');
-            itemDiv.className = 'suggestion-item';
-            itemDiv.innerText = item;
-            itemDiv.onmousedown = (e) => {{
-                input.value = item;
-                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                div.style.display = 'none';
-            }};
-            div.appendChild(itemDiv);
-        }});
-        input.parentElement.style.position = 'relative';
-        input.parentElement.appendChild(div);
-        return div;
-    }}
-    setInterval(() => {{
-        const inputs = doc.querySelectorAll('input, textarea');
-        inputs.forEach(input => {{
-            const label = input.ariaLabel;
-            if (historyData[label] && !input.dataset.hasList) {{
-                const listDiv = createList(input, historyData[label]);
-                input.onfocus = () => {{ if(historyData[label].length > 0) listDiv.style.display = 'block'; }};
-                input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
-                input.dataset.hasList = "true";
-            }}
-            if (label && label.includes('金額')) {{ input.type = 'number'; input.inputMode = 'numeric'; }}
-        }});
-    }}, 1000);
-    </script>
-"""
-components.html(history_js, height=0)
+                        with cols[0]: st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int
