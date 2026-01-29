@@ -69,7 +69,6 @@ def load_data():
 
 df_all = load_data()
 
-# 履歴（ユニークなリスト）を取得する関数
 def get_unique_history(column_name):
     if column_name in df_all.columns:
         return sorted([str(x) for x in df_all[column_name].unique() if str(x).strip() != ""])
@@ -82,6 +81,7 @@ ADMIN_PASS = "1234"
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
+    # --- 管理者画面（変更なし） ---
     pwd = st.text_input("管理者パスワード", type="password")
     if pwd == ADMIN_PASS:
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
@@ -136,25 +136,35 @@ else:
             # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             
-            c1, c2 = st.columns(2)
-            with c1:
+            # --- 日付・支払先エリア ---
+            c_date, c_pay = st.columns([1, 1.5])
+            with c_date:
                 input_date = st.date_input("日付", date.today())
-                
-                # 支払先の入力切り替え
-                use_payee_h = st.checkbox("履歴から支払先を選択")
-                if use_payee_h:
-                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"))
-                else:
-                    payee = st.text_input("支払先", placeholder="例：〇〇商事")
-                
-            with c2:
-                # 品名・名目の入力切り替え
-                use_item_h = st.checkbox("履歴から品名を選択")
-                if use_item_h:
-                    item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"))
-                else:
-                    item_name = st.text_input("品名・名目", placeholder="例：交通費")
-                    
+            with c_pay:
+                # 入力欄とチェックボックスを横並びにする
+                sub_c1, sub_c2 = st.columns([3, 1])
+                with sub_c2:
+                    use_payee_h = st.checkbox("履歴", key="h_pay")
+                with sub_c1:
+                    if use_payee_h:
+                        payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"), label_visibility="collapsed")
+                    else:
+                        payee = st.text_input("支払先", placeholder="支払先", label_visibility="collapsed")
+                st.caption("支払先")
+
+            # --- 品名・金額エリア ---
+            c_item, c_amt = st.columns([1.5, 1])
+            with c_item:
+                sub_c3, sub_c4 = st.columns([3, 1])
+                with sub_c4:
+                    use_item_h = st.checkbox("履歴", key="h_item")
+                with sub_c3:
+                    if use_item_h:
+                        item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"), label_visibility="collapsed")
+                    else:
+                        item_name = st.text_input("品名・名目", placeholder="品名・名目", label_visibility="collapsed")
+                st.caption("品名・名目")
+            with c_amt:
                 amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
             
             memo = st.text_area("備考", placeholder="補足があれば入力", height=70)
