@@ -47,6 +47,14 @@ css_code = f"""
     .col-item {{ width: 22%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
+
+    .custom-suggestion-list {{
+        position: absolute; z-index: 1000; background: white; border: 1px solid #ddd;
+        border-radius: 5px; max-height: 150px; overflow-y: auto; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+        width: 100%; display: none;
+    }}
+    .suggestion-item {{ padding: 8px 12px; cursor: pointer; font-size: 0.9rem; border-bottom: 1px solid #f0f0f0; }}
+    .suggestion-item:hover {{ background-color: #f7e6f9; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
@@ -69,12 +77,15 @@ def load_data():
 
 df_all = load_data()
 
-# 履歴（ユニークなリスト）を取得する関数
-def get_unique_history(column_name):
-    if column_name in df_all.columns:
-        return sorted([str(x) for x in df_all[column_name].unique() if str(x).strip() != ""])
-    return []
+def get_h(col):
+    return sorted([str(x) for x in df_all[col].unique() if str(x).strip() != ""])
 
+payee_h = get_h("支払先")
+item_h = get_h("品名・名目")
+memo_h = get_h("備考")
+
+# --- パスワード設定 (暫定) ---
+# 本来は名前ごとに分けるのが理想ですが、まずは共通パスワードでロックします
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
@@ -116,61 +127,40 @@ else:
         selected_user = st.selectbox("名前を選択", ["選択してください"] + name_list)
     
     if selected_user != "選択してください":
+        # 名前を選んだらパスワード入力を求める
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
         
         if user_pwd == USER_PASS:
-            df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
-            month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
-            
             with col_s2:
+                df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
+                month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
                 selected_month = st.selectbox("表示月", month_list) if month_list else ""
-            
-            if selected_month:
-                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
-            else:
-                filtered_df = pd.DataFrame(columns=COLS)
+                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if selected_month else pd.DataFrame(columns=COLS)
 
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム
+            # 入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
-            
             c1, c2 = st.columns(2)
             with c1:
                 input_date = st.date_input("日付", date.today())
-                
-                # 支払先の入力切り替え
-                use_payee_h = st.checkbox("履歴から支払先を選択")
-                if use_payee_h:
-                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"))
-                else:
-                    payee = st.text_input("支払先", placeholder="例：〇〇商事")
-                
+                payee = st.text_input("支払先", placeholder="例：〇〇商事", key="payee_in")
             with c2:
-                # 品名・名目の入力切り替え
-                use_item_h = st.checkbox("履歴から品名を選択")
-                if use_item_h:
-                    item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"))
-                else:
-                    item_name = st.text_input("品名・名目", placeholder="例：交通費")
-                    
+                item_name = st.text_input("品名・名目", placeholder="例：交通費", key="item_in")
                 amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
-            
-            memo = st.text_area("備考", placeholder="補足があれば入力", height=70)
+            memo = st.text_area("備考", placeholder="補足があれば入力", height=70, key="memo_in")
 
             if st.button("登録する", use_container_width=True):
                 clean_amount = "".join(filter(str.isdigit, amount_str))
                 amount_val = int(clean_amount) if clean_amount else 0
-                if amount_val > 0:
+                if amount_val > 0 and payee != "" and item_name != "":
                     new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
-                    df_for_save = df_all.drop(columns=['年月'], errors='ignore')
-                    pd.concat([df_for_save, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                    pd.concat([df_all.drop(columns=['年月'], errors='ignore'), new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
                     st.success("登録完了！")
                     st.rerun()
-                else:
-                    st.warning("金額を入力してください。")
 
+            # 明細
             st.markdown("---")
             if not filtered_df.empty:
                 st.write("### 🗓️ 明細履歴")
@@ -191,18 +181,45 @@ else:
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript: テンキー対応
-components.html("""
+# --- JavaScript ---
+# (前回のサジェスト機能を継承)
+history_js = f"""
     <script>
     const doc = window.parent.document;
-    setInterval(() => {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
-                input.type = 'number';
-                input.inputMode = 'numeric';
-            }
-        });
-    }, 1000);
+    const historyData = {{ "支払先": {payee_h}, "品名・名目": {item_h}, "備考": {memo_h} }};
+    function createList(input, list) {{
+        const oldList = input.parentElement.querySelector('.custom-suggestion-list');
+        if (oldList) oldList.remove();
+        const div = doc.createElement('div');
+        div.className = 'custom-suggestion-list';
+        list.forEach(item => {{
+            const itemDiv = doc.createElement('div');
+            itemDiv.className = 'suggestion-item';
+            itemDiv.innerText = item;
+            itemDiv.onmousedown = (e) => {{
+                input.value = item;
+                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                div.style.display = 'none';
+            }};
+            div.appendChild(itemDiv);
+        }});
+        input.parentElement.style.position = 'relative';
+        input.parentElement.appendChild(div);
+        return div;
+    }}
+    setInterval(() => {{
+        const inputs = doc.querySelectorAll('input, textarea');
+        inputs.forEach(input => {{
+            const label = input.ariaLabel;
+            if (historyData[label] && !input.dataset.hasList) {{
+                const listDiv = createList(input, historyData[label]);
+                input.onfocus = () => {{ if(historyData[label].length > 0) listDiv.style.display = 'block'; }};
+                input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
+                input.dataset.hasList = "true";
+            }}
+            if (label && label.includes('金額')) {{ input.type = 'number'; input.inputMode = 'numeric'; }}
+        }});
+    }}, 1000);
     </script>
-""", height=0)
+"""
+components.html(history_js, height=0)
