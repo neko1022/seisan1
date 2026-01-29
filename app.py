@@ -32,8 +32,8 @@ css_code = f"""
 
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
-    .total-label {{ font-size: 1.2rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
-    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
+    .total-label {{ font-size: 1.4rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
+    .total-a {{ font-size: 2.4rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
