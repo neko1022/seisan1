@@ -29,24 +29,23 @@ css_code = f"""
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     
-    /* 合計金額ラベルと数字のスタイル */
     .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
-    /* テーブル全体のデザイン */
+    /* テーブル全体のデザイン：スマホで重ならないよう調整 */
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
-    .table-style th {{ background: #71018C; color: white; padding: 12px; text-align: left; font-size: 0.9rem; }}
-    .table-style td {{ border-bottom: 1px solid #eee; padding: 12px; color: #333; font-size: 0.85rem; word-wrap: break-word; }}
+    .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
+    .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* カラム幅の設定 */
-    .col-date {{ width: 130px; }}
-    .col-payee {{ width: 20%; }}
-    .col-item {{ width: 20%; }}
-    .col-memo {{ width: auto; }}
-    .col-amount {{ width: 110px; }}
+    /* スマホに最適化したカラム幅の設定 */
+    .col-date {{ width: 55px; }}    /* 01-28が入る最小幅 */
+    .col-payee {{ width: 22%; }}
+    .col-item {{ width: 22%; }}
+    .col-memo {{ width: auto; }}    /* 備考が伸縮して調整 */
+    .col-amount {{ width: 85px; }}   /* 金額に「円」がついても収まる幅 */
 
 </style>
 """
@@ -108,10 +107,8 @@ else:
     selected_month = ""
     filtered_df = pd.DataFrame(columns=COLS)
 
-# 合計金額の計算
 total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
 
-# 修正ポイント：「経費合計」ラベルを復活
 st.markdown(f'''
     <div class="header-box">
         <p class="total-label">経費合計</p>
@@ -153,9 +150,11 @@ if not filtered_df.empty:
         for idx, row in filtered_df.iterrows():
             cols = st.columns([5, 1])
             with cols[0]:
-                p = row['支払先'] if row['支払先'] != "" else "(未入力)"
-                i = row['品名・名目'] if row['品名・名目'] != "" else "(未入力)"
-                st.write(f"【{row['日付']}】 {p} / {i} / {int(row['金額']):,}円")
+                p = row['支払先'] if row['支払先'] != "" else "(未)"
+                i = row['品名・名目'] if row['品名・名目'] != "" else "(未)"
+                # 削除モード時も月-日形式に
+                display_date = row['日付'].strftime('%m-%d')
+                st.write(f"【{display_date}】 {p} / {i} / {int(row['金額']):,}円")
             with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
                     df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
@@ -163,12 +162,15 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
+        # 通常表示
         rows_html = ""
         for _, r in filtered_df.iterrows():
+            # 日付を月-日形式に変換
+            short_date = r['日付'].strftime('%m-%d')
             f_payee = r['支払先'] if pd.notna(r['支払先']) else ""
             f_item = r['品名・名目'] if pd.notna(r['品名・名目']) else ""
             f_memo = r['備考'] if pd.notna(r['備考']) else ""
-            rows_html += f"<tr><td>{r['日付']}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,} 円</td></tr>"
+            rows_html += f"<tr><td>{short_date}</td><td>{f_payee}</td><td>{f_item}</td><td>{f_memo}</td><td>{int(r['金額']):,}円</td></tr>"
         
         st.markdown(f'''
             <table class="table-style">
@@ -176,7 +178,7 @@ if not filtered_df.empty:
                     <tr>
                         <th class="col-date">日付</th>
                         <th class="col-payee">支払先</th>
-                        <th class="col-item">品名・名目</th>
+                        <th class="col-item">品名</th>
                         <th class="col-memo">備考</th>
                         <th class="col-amount">金額</th>
                     </tr>
