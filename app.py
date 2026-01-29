@@ -69,6 +69,8 @@ df_all = load_data()
 # --- メイン画面 ---
 
 # 1. 絞り込み表示
+col_s1, col_s2 = st.columns(2)
+with col_s1:
     # 選択肢（将来的に増やすことも可能）
     name_list = ["山田太郎"]
     # 既存データにある名前も選択肢に加える
