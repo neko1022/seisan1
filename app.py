@@ -42,15 +42,9 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    .col-date {{ width: 55px; }}
-    .col-payee {{ width: 22%; }}
-    .col-item {{ width: 22%; }}
-    .col-memo {{ width: auto; }}
-    .col-amount {{ width: 85px; }}
-
-    /* チェックボックスの縦位置微調整 */
+    /* チェックボックスの縦位置をラベルの横に合わせる */
     [data-testid="stCheckbox"] {{
-        margin-top: 25px !important;
+        margin-top: -10px !important;
     }}
 </style>
 """
@@ -74,7 +68,6 @@ def load_data():
 
 df_all = load_data()
 
-# 履歴取得用関数
 def get_h(col):
     if col in df_all.columns:
         return sorted([str(x) for x in df_all[col].unique() if str(x).strip() != ""])
@@ -140,16 +133,17 @@ else:
 
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             
-            # --- 入力エリア ---
+            # --- 入力エリアの配置修正 ---
             c1, c2 = st.columns(2)
             with c1:
-                input_date = st.date_input("日付", date.today())
+                st.write("**日付**")
+                input_date = st.date_input("日付入力", date.today(), label_visibility="collapsed")
                 
                 # 支払先：タイトルとスイッチを横並びに
-                sub_c1, sub_c2 = st.columns([2, 1])
-                with sub_c1:
+                sub_c_p1, sub_c_p2 = st.columns([1, 1])
+                with sub_c_p1:
                     st.write("**支払先**")
-                with sub_c2:
+                with sub_c_p2:
                     use_payee_h = st.checkbox("履歴選択", key="use_p_h")
                 
                 if use_payee_h:
@@ -159,10 +153,10 @@ else:
                     
             with c2:
                 # 品名・名目：タイトルとスイッチを横並びに
-                sub_c3, sub_c4 = st.columns([2, 1])
-                with sub_c3:
+                sub_c_i1, sub_c_i2 = st.columns([1, 1])
+                with sub_c_i1:
                     st.write("**品名・名目**")
-                with sub_c4:
+                with sub_c_i2:
                     use_item_h = st.checkbox("履歴選択", key="use_i_h")
                 
                 if use_item_h:
@@ -170,9 +164,11 @@ else:
                 else:
                     item_name = st.text_input("品名(手入力)", placeholder="例：交通費", label_visibility="collapsed")
                 
-                amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
+                st.write("**金額 (円)**")
+                amount_str = st.text_input("金額(手入力)", placeholder="数字を入力", label_visibility="collapsed")
             
-            memo = st.text_area("備考", placeholder="補足があれば入力", height=70)
+            st.write("**備考**")
+            memo = st.text_area("備考(手入力)", placeholder="補足があれば入力", height=70, label_visibility="collapsed")
 
             if st.button("登録する", use_container_width=True):
                 clean_amount = "".join(filter(str.isdigit, amount_str))
@@ -202,7 +198,7 @@ else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# JavaScript
+# JavaScript: テンキー対応
 components.html("""
     <script>
     const doc = window.parent.document;
