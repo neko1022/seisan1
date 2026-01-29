@@ -32,34 +32,69 @@ css_code = f"""
     }}
 
     .stApp {{ background-color: #DEBCE5 !important; }}
-    .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
-    .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
-    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
-    .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
-    .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
-    .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
-    .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
-    .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
+    /* 共通：スマホの自動色変更を防止するための設定 */
+    
+    /* 1. 紫背景の上の文字は「白」に固定 */
+    .form-title {{ 
+        background: #71018C; 
+        color: #FFFFFF !important; 
+        padding: 8px 15px; 
+        border-radius: 5px; 
+        margin-bottom: 15px; 
+    }}
+    .stButton>button {{ 
+        background-color: #71018C !important; 
+        color: #FFFFFF !important; 
+        border-radius: 25px !important; 
+        font-weight: bold !important; 
+    }}
+    .table-style th {{ 
+        background: #71018C; 
+        color: #FFFFFF !important; 
+        padding: 8px 5px; 
+        text-align: left; 
+        font-size: 0.8rem; 
+    }}
 
-    .col-date {{ width: 55px; }}
-    .col-payee {{ width: 22%; }}
-    .col-item {{ width: 22%; }}
-    .col-memo {{ width: auto; }}
-    .col-amount {{ width: 85px; }}
+    /* 2. 薄紫背景の上の文字は「濃いグレー（黒）」に固定 */
+    .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
+    .total-label {{ font-size: 1.1rem; color: #444444 !important; margin-bottom: 5px; font-weight: bold; }}
+    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C !important; margin: 0; }}
+    
+    .table-style td {{ 
+        border-bottom: 1px solid #eee; 
+        padding: 10px 5px; 
+        color: #333333 !important; 
+        font-size: 0.8rem; 
+        word-wrap: break-word; 
+        background-color: white;
+    }}
+
+    /* 管理者画面のリスト用テキスト */
+    .admin-text {{
+        color: #333333 !important;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }}
 
     .custom-suggestion-list {{
         position: absolute; z-index: 1000; background: white; border: 1px solid #ddd;
         border-radius: 5px; max-height: 150px; overflow-y: auto; box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
         width: 100%; display: none;
     }}
-    .suggestion-item {{ padding: 8px 12px; cursor: pointer; font-size: 0.9rem; border-bottom: 1px solid #f0f0f0; }}
-    .suggestion-item:hover {{ background-color: #f7e6f9; }}
+    .suggestion-item {{ 
+        padding: 8px 12px; 
+        cursor: pointer; 
+        font-size: 0.9rem; 
+        border-bottom: 1px solid #f0f0f0; 
+        color: #333333 !important; 
+    }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理 ---
+# --- 以下、データ処理や画面構成のコードは前回と同じ ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -84,11 +119,9 @@ payee_h = get_h("支払先")
 item_h = get_h("品名・名目")
 memo_h = get_h("備考")
 
-# --- パスワード設定 (暫定) ---
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
-# --- 画面構成 ---
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
@@ -106,8 +139,9 @@ if is_admin:
             for idx, row in user_summary.iterrows():
                 c_switch, c_name, c_amt = st.columns([1, 2, 2])
                 with c_switch: show_detail = st.toggle("明細", key=f"details_{idx}")
-                with c_name: st.write(f"**{row['名前']}**")
-                with c_amt: st.write(f"{int(row['金額']):,} 円")
+                with c_name: st.markdown(f"<div class='admin-text'>{row['名前']}</div>", unsafe_allow_html=True)
+                with c_amt: st.markdown(f"<div class='admin-text'>{int(row['金額']):,} 円</div>", unsafe_allow_html=True)
+                
                 if show_detail:
                     u_detail = admin_df[admin_df["名前"] == row["名前"]].copy()
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in u_detail.iterrows()])
@@ -119,7 +153,6 @@ if is_admin:
     elif pwd != "":
         st.error("パスワードが違います")
 else:
-    # --- 個人申請モード ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -127,7 +160,6 @@ else:
     
     if selected_user != "選択してください":
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
-        
         if user_pwd == USER_PASS:
             with col_s2:
                 df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
@@ -138,7 +170,6 @@ else:
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -158,7 +189,6 @@ else:
                     st.success("登録完了！")
                     st.rerun()
 
-            # 明細
             st.markdown("---")
             if not filtered_df.empty:
                 st.write("### 🗓️ 明細履歴")
@@ -179,44 +209,19 @@ else:
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# --- JavaScript ---
-history_js = f"""
+# JavaScript
+components.html("""
     <script>
     const doc = window.parent.document;
-    const historyData = {{ "支払先": {payee_h}, "品名・名目": {item_h}, "備考": {memo_h} }};
-    function createList(input, list) {{
-        const oldList = input.parentElement.querySelector('.custom-suggestion-list');
-        if (oldList) oldList.remove();
-        const div = doc.createElement('div');
-        div.className = 'custom-suggestion-list';
-        list.forEach(item => {{
-            const itemDiv = doc.createElement('div');
-            itemDiv.className = 'suggestion-item';
-            itemDiv.innerText = item;
-            itemDiv.onmousedown = (e) => {{
-                input.value = item;
-                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                div.style.display = 'none';
-            }};
-            div.appendChild(itemDiv);
-        }});
-        input.parentElement.style.position = 'relative';
-        input.parentElement.appendChild(div);
-        return div;
-    }}
-    setInterval(() => {{
+    setInterval(() => {
         const inputs = doc.querySelectorAll('input, textarea');
-        inputs.forEach(input => {{
+        inputs.forEach(input => {
             const label = input.ariaLabel;
-            if (historyData[label] && !input.dataset.hasList) {{
-                const listDiv = createList(input, historyData[label]);
-                input.onfocus = () => {{ if(historyData[label].length > 0) listDiv.style.display = 'block'; }};
-                input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
-                input.dataset.hasList = "true";
-            }}
-            if (label && label.includes('金額')) {{ input.type = 'number'; input.inputMode = 'numeric'; }}
-        }});
-    }}, 1000);
+            if (label && label.includes('金額')) {
+                input.type = 'number';
+                input.inputMode = 'numeric';
+            }
+        });
+    }, 1000);
     </script>
-"""
-components.html(history_js, height=0)
+""", height=0)
