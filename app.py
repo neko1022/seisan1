@@ -33,11 +33,33 @@ css_code = f"""
 
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
-    .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
-    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
+    
+    /* 合計金額のサイズ調整 */
+    .total-label {{ 
+        font-size: 1.4rem; /* ← 〇〇さんの合計 のサイズ */
+        color: #444; 
+        margin-bottom: 5px; 
+        font-weight: bold; 
+    }}
+    .total-a {{ 
+        font-size: 2.5rem; /* ← 金額数値 のサイズ */
+        font-weight: bold; 
+        color: #71018C; 
+        margin: 0; 
+    }}
+
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
+    /* ★明細履歴専用のスタイル★ */
+    .history-header {{
+        font-size: 1.2rem;   /* 大きさ：自由に変えてください */
+        color: #71018C;      /* 色：メインの紫に設定 */
+        font-weight: bold;   /* 太さ：太字 */
+        margin-top: 20px;    /* 上の線との間隔 */
+        margin-bottom: 10px; /* 下の要素との間隔 */
+    }}
+
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
@@ -73,7 +95,7 @@ USER_PASS = "0000"
 ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
-is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
+is_admin = st.toggle("🛠️ 管理者モードに切り替え")
 
 if is_admin:
     pwd = st.text_input("管理者パスワード", type="password")
@@ -127,7 +149,7 @@ else:
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム（履歴機能なしの純粋なテキスト入力）
+            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -152,7 +174,9 @@ else:
 
             st.markdown("---")
             if not filtered_df.empty:
-                st.write("### 🗓️ 明細履歴")
+                # ★修正：st.write を廃止し、専用のHTMLタグ（history-header）を使用★
+                st.markdown('<div class="history-header">🗓️ 明細履歴</div>', unsafe_allow_html=True)
+                
                 delete_mode = st.toggle("🗑️ 編集・削除モード")
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
@@ -170,7 +194,7 @@ else:
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript: テンキー対応のみ維持
+# JavaScript
 components.html("""
     <script>
     const doc = window.parent.document;
