@@ -27,9 +27,15 @@ css_code = f"""
     }}
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
     
-    /* アイコン文字化け(keyboard_double_arrow...)対策 */
-    header, [data-testid="stHeader"], [data-testid="collapsedControl"] {{
-        display: none !important;
+    /* 文字化け(keyboard_double_arrow...)対策の修正 */
+    /* アイコンフォントのみ標準フォントを適用して文字化けを回避 */
+    .st-emotion-cache-6qob1r, [data-testid="stHeader"], [data-testid="collapsedControl"] span {{
+        font-family: sans-serif !important;
+    }}
+    
+    /* ヘッダーの余計な隙間を詰める */
+    header[data-testid="stHeader"] {{
+        background-color: rgba(0,0,0,0);
     }}
 
     .stApp {{ background-color: #DEBCE5 !important; }}
@@ -168,11 +174,11 @@ if mode == "個人精算（申請）":
                     <tbody>{rows_html}</tbody>
                 </table>
             ''', unsafe_allow_html=True)
-    else:
-        st.info(f"表示できる明細はありません。")
+else:
+    st.info(f"表示できる明細はありません。")
 
 # --- 2. 管理者画面（集計画面） ---
-elif mode == "管理者画面（集計）":
+if mode == "管理者画面（集計）":
     st.write("### 📊 全体集計（管理者用）")
     if not df_all.empty:
         df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
