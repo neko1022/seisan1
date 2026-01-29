@@ -125,7 +125,7 @@ else:
     # 既存の申請画面
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        name_list = ["山田太郎"]
+        name_list = ["山田太郎", "佐藤花子", "鈴木一郎", "田中次郎"]
         current_names = sorted(df_all["名前"].unique().tolist())
         for n in current_names:
             if n not in name_list and n != "": name_list.append(n)
