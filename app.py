@@ -42,9 +42,34 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* チェックボックスの縦位置をラベルの横に合わせる */
-    [data-testid="stCheckbox"] {{
-        margin-top: -10px !important;
+    /* ★ 画像通りの高さを実現するためのCSS調整 ★ */
+    /* ラベルとチェックボックスを横並びにするコンテナ */
+    div.custom-label-row {{
+        display: flex;
+        align-items: center; /* 上下中央揃え */
+        gap: 10px;           /* 文字とチェックボックスの間隔 */
+        margin-bottom: -10px; /* 下の入力欄との隙間を詰める */
+        margin-top: 5px;
+    }}
+    
+    /* 項目名の文字スタイル */
+    span.label-text {{
+        font-weight: bold;
+        font-size: 0.9rem;
+        color: #31333F;
+    }}
+
+    /* Streamlit標準チェックボックスの余計な余白を完全に除去 */
+    div[data-testid="stCheckbox"] {{
+        margin: 0 !important;
+        padding: 0 !important;
+        display: flex;
+        align-items: center;
+    }}
+    div[data-testid="stCheckbox"] label {{
+        margin: 0 !important;
+        padding: 0 !important;
+        min-height: 0 !important;
     }}
 </style>
 """
@@ -119,32 +144,23 @@ else:
         if user_pwd == USER_PASS:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
+            with col_s2: selected_month = st.selectbox("表示月", month_list) if month_list else ""
             
-            with col_s2:
-                selected_month = st.selectbox("表示月", month_list) if month_list else ""
-            
-            if selected_month:
-                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
-            else:
-                filtered_df = pd.DataFrame(columns=COLS)
-
-            total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
-            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
+            filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if selected_month else pd.DataFrame(columns=COLS)
+            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(filtered_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
 
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             
-            # --- 入力エリアの配置修正 ---
+            # --- 入力エリア ---
             c1, c2 = st.columns(2)
             with c1:
-                st.write("**日付**")
+                st.markdown('<div class="custom-label-row"><span class="label-text">日付</span></div>', unsafe_allow_html=True)
                 input_date = st.date_input("日付入力", date.today(), label_visibility="collapsed")
                 
-                # 支払先：タイトルとスイッチを横並びに
-                sub_c_p1, sub_c_p2 = st.columns([1, 1])
-                with sub_c_p1:
-                    st.write("**支払先**")
-                with sub_c_p2:
-                    use_payee_h = st.checkbox("履歴選択", key="use_p_h")
+                # 支払先ラベルと履歴チェック
+                st.markdown('<div class="custom-label-row"><span class="label-text">支払先</span>', unsafe_allow_html=True)
+                use_payee_h = st.checkbox("履歴選択", key="use_p_h")
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 if use_payee_h:
                     payee = st.selectbox("支払先(履歴)", [""] + get_h("支払先"), label_visibility="collapsed")
@@ -152,22 +168,20 @@ else:
                     payee = st.text_input("支払先(手入力)", placeholder="例：〇〇商事", label_visibility="collapsed")
                     
             with c2:
-                # 品名・名目：タイトルとスイッチを横並びに
-                sub_c_i1, sub_c_i2 = st.columns([1, 1])
-                with sub_c_i1:
-                    st.write("**品名・名目**")
-                with sub_c_i2:
-                    use_item_h = st.checkbox("履歴選択", key="use_i_h")
+                # 品名・名目ラベルと履歴チェック
+                st.markdown('<div class="custom-label-row"><span class="label-text">品名・名目</span>', unsafe_allow_html=True)
+                use_item_h = st.checkbox("履歴選択", key="use_i_h")
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 if use_item_h:
                     item_name = st.selectbox("品名(履歴)", [""] + get_h("品名・名目"), label_visibility="collapsed")
                 else:
-                    item_name = st.text_input("品名(手入力)", placeholder="例：交通費", label_visibility="collapsed")
+                    item_name = st.text_input("品名(手入力)", placeholder="交通費", label_visibility="collapsed")
                 
-                st.write("**金額 (円)**")
+                st.markdown('<div class="custom-label-row"><span class="label-text">金額 (円)</span></div>', unsafe_allow_html=True)
                 amount_str = st.text_input("金額(手入力)", placeholder="数字を入力", label_visibility="collapsed")
             
-            st.write("**備考**")
+            st.markdown('<div class="custom-label-row"><span class="label-text">備考</span></div>', unsafe_allow_html=True)
             memo = st.text_area("備考(手入力)", placeholder="補足があれば入力", height=70, label_visibility="collapsed")
 
             if st.button("登録する", use_container_width=True):
@@ -175,8 +189,7 @@ else:
                 amount_val = int(clean_amount) if clean_amount else 0
                 if amount_val > 0:
                     new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
-                    df_for_save = df_all.drop(columns=['年月'], errors='ignore')
-                    pd.concat([df_for_save, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+                    pd.concat([df_all.drop(columns=['年月'], errors='ignore'), new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
                     st.success("登録完了！")
                     st.rerun()
                 else:
@@ -196,20 +209,4 @@ else:
                                 st.rerun()
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-
-# JavaScript: テンキー対応
-components.html("""
-    <script>
-    const doc = window.parent.document;
-    setInterval(() => {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
-                input.type = 'number';
-                input.inputMode = 'numeric';
-            }
-        });
-    }, 1000);
-    </script>
-""", height=0)
+                    st.markdown(f'<table class="table-style"><thead><tr><th>日付</th><th>支払先</th><th>品名</th><th>備考</th><th>金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
