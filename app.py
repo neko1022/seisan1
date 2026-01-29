@@ -42,34 +42,35 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* ★ ズレを完全に解消するためのCSS ★ */
+    /* ★ チェックボックスとラベルを完全に同じラインに揃えるCSS ★ */
     .label-row {{
         display: flex;
-        align-items: center; /* 上下中央揃え */
-        height: 32px; /* 高さを固定 */
-        gap: 8px; /* 文字とチェックボックスの間隔 */
-        margin-top: 10px;
+        align-items: center; /* 垂直方向の中央揃え */
+        height: 2.5rem;      /* ラベル行の高さを固定 */
+        gap: 5px;            /* 文字とチェックボックスの隙間 */
     }}
     .custom-label {{
         font-weight: bold;
         font-size: 0.9rem;
         color: #31333F;
     }}
-    /* Streamlit標準のチェックボックスの余白を消す */
-    [data-testid="stCheckbox"] {{
-        margin: 0 !important;
-        padding: 0 !important;
+    /* Streamlit標準のチェックボックス周りの余分な余白をカット */
+    div[data-testid="stCheckbox"] {{
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
+        display: flex;
+        align-items: center;
     }}
-    [data-testid="stCheckbox"] label {{
-        padding: 0 !important;
-        margin: 0 !important;
-        min-height: 0 !important;
+    div[data-testid="stCheckbox"] label {{
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
+        margin-bottom: 0px !important;
     }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理 ---
+# --- データ処理（安定版） ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -77,12 +78,10 @@ def load_data():
     if os.path.exists(CSV_FILE):
         try:
             df = pd.read_csv(CSV_FILE)
-            if "名前" not in df.columns:
-                df.insert(0, "名前", "山田太郎")
+            if "名前" not in df.columns: df.insert(0, "名前", "山田太郎")
             df["日付"] = pd.to_datetime(df["日付"]).dt.date
             return df.fillna("")
-        except:
-            return pd.DataFrame(columns=COLS)
+        except: return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
 df_all = load_data()
@@ -98,6 +97,7 @@ USER_PASS, ADMIN_PASS = "0000", "1234"
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
+    # --- 管理者モード（前回と同じ） ---
     pwd = st.text_input("管理者パスワード", type="password")
     if pwd == ADMIN_PASS:
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
@@ -121,7 +121,7 @@ if is_admin:
     elif pwd != "": st.error("パスワード不一致")
 
 else:
-    # --- 個人申請モード ---
+    # --- 個人申請モード（レイアウト修正版） ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -132,41 +132,46 @@ else:
         if user_pwd == USER_PASS:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
-            with col_s2:
-                selected_month = st.selectbox("表示月", month_list) if month_list else ""
+            with col_s2: selected_month = st.selectbox("表示月", month_list) if month_list else ""
             
             filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if selected_month else pd.DataFrame(columns=COLS)
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(filtered_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
 
             st.markdown('<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             
-            # --- 入力エリア ---
+            # --- 1段目: 日付 と 品名 ---
             c1, c2 = st.columns(2)
             with c1:
-                st.write("**日付**")
+                st.markdown('<div class="label-row"><span class="custom-label">日付</span></div>', unsafe_allow_html=True)
                 input_date = st.date_input("日付", date.today(), label_visibility="collapsed")
-                
-                # 支払先：ラベルとチェックボックスを横並びに
-                st.markdown('<div class="label-row"><span class="custom-label">支払先</span>(履歴から選択)</div>', unsafe_allow_html=True)
-                use_payee_h = st.checkbox("", key="h_pay", label_visibility="collapsed")
-                if use_payee_h:
-                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"), label_visibility="collapsed")
-                else:
-                    payee = st.text_input("支払先入力", placeholder="例：〇〇商事", label_visibility="collapsed")
-                    
             with c2:
-                # 品名：ラベルとチェックボックスを横並びに
-                st.markdown('<div class="label-row"><span class="custom-label">品名・名目</span>(履歴から選択)</div>', unsafe_allow_html=True)
+                # 品名ラベルとチェックボックスを強制横並び
+                st.markdown('<div class="label-row"><span class="custom-label">品名・名目 (履歴から選択)</span>', unsafe_allow_html=True)
                 use_item_h = st.checkbox("", key="h_item", label_visibility="collapsed")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
                 if use_item_h:
                     item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"), label_visibility="collapsed")
                 else:
                     item_name = st.text_input("品名入力", placeholder="例：交通費", label_visibility="collapsed")
+
+            # --- 2段目: 支払先 と 金額 ---
+            c3, c4 = st.columns(2)
+            with c3:
+                # 支払先ラベルとチェックボックスを強制横並び
+                st.markdown('<div class="label-row"><span class="custom-label">支払先 (履歴から選択)</span>', unsafe_allow_html=True)
+                use_payee_h = st.checkbox("", key="h_pay", label_visibility="collapsed")
+                st.markdown('</div>', unsafe_allow_html=True)
                 
-                st.write("**金額 (円)**")
+                if use_payee_h:
+                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"), label_visibility="collapsed")
+                else:
+                    payee = st.text_input("支払先入力", placeholder="例：〇〇商事", label_visibility="collapsed")
+            with c4:
+                st.markdown('<div class="label-row"><span class="custom-label">金額 (円)</span></div>', unsafe_allow_html=True)
                 amount_str = st.text_input("金額入力", placeholder="数字を入力", label_visibility="collapsed")
             
-            st.write("**備考**")
+            st.markdown('<div class="label-row"><span class="custom-label">備考</span></div>', unsafe_allow_html=True)
             memo = st.text_area("備考入力", placeholder="補足があれば入力", height=70, label_visibility="collapsed")
 
             if st.button("登録する", use_container_width=True):
@@ -179,7 +184,6 @@ else:
                     st.rerun()
                 else: st.warning("金額を入力してください。")
 
-            # 明細履歴
             st.markdown("---")
             if not filtered_df.empty:
                 st.write("### 🗓️ 明細履歴")
