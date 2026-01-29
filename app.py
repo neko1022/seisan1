@@ -32,13 +32,16 @@ css_code = f"""
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
+    
+    /* テーブル全体のデザイン */
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
+
+    /* カラム幅の設定（名前列を削除した分、他を調整） */
     .col-date {{ width: 55px; }}
-    .col-name {{ width: 80px; }} /* 名前用の列幅 */
-    .col-payee {{ width: 18%; }}
-    .col-item {{ width: 18%; }}
+    .col-payee {{ width: 25%; }}
+    .col-item {{ width: 25%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
 </style>
@@ -47,14 +50,14 @@ st.markdown(css_code, unsafe_allow_html=True)
 
 # --- データ処理関数 ---
 CSV_FILE = "expenses.csv"
-COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"] # 名前を追加
+COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
 def load_data():
     if os.path.exists(CSV_FILE):
         try:
             df = pd.read_csv(CSV_FILE)
-            if "名前" not in df.columns: # 旧データ対応
-                df.insert(0, "名前", "不明")
+            if "名前" not in df.columns:
+                df.insert(0, "名前", "山田太郎")
             df["日付"] = pd.to_datetime(df["日付"]).dt.date
             return df.fillna("")
         except:
@@ -69,12 +72,12 @@ df_all = load_data()
 st.write("### 🔍 表示設定")
 col_s1, col_s2 = st.columns(2)
 with col_s1:
-    # 名前の選択欄
-    name_list = ["山田太郎"] # 実際にはここをリストで管理
+    # 選択肢（将来的に増やすことも可能）
+    name_list = ["山田太郎"]
+    # 既存データにある名前も選択肢に加える
     current_names = sorted(df_all["名前"].unique().tolist())
     for n in current_names:
         if n not in name_list and n != "": name_list.append(n)
-    
     selected_user = st.selectbox("申請者を選択", name_list)
 
 with col_s2:
@@ -82,6 +85,7 @@ with col_s2:
         df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
         month_list = sorted(df_all['年月'].unique(), reverse=True)
         selected_month = st.selectbox("表示月を選択", month_list)
+        # 「名前」と「月」でフィルタリング
         filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
     else:
         selected_month = ""
@@ -100,7 +104,8 @@ st.markdown(f'''
 st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
 c1, c2, c3 = st.columns([1, 1, 1])
 with c1:
-    user_name = st.selectbox("名前", name_list, key="input_name")
+    # 登録する名前（選択された申請者を引き継ぐ）
+    user_name = st.selectbox("名前", name_list, key="input_name", index=name_list.index(selected_user) if selected_user in name_list else 0)
 with c2:
     input_date = st.date_input("日付", date.today())
 with c3:
@@ -121,15 +126,15 @@ if st.button("登録する", use_container_width=True):
         df_for_save = df_all.drop(columns=['年月'], errors='ignore')
         updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
         updated_df.fillna("").to_csv(CSV_FILE, index=False)
-        st.success(f"{user_name} さんのデータを登録しました！")
+        st.success(f"登録完了！")
         st.rerun()
     else:
         st.warning("金額を入力してください。")
 
-# 3. 履歴明細
+# 3. 履歴明細（名前列を表示しない）
 st.markdown("---")
 if not filtered_df.empty:
-    st.write(f"### 🗓️ {selected_user} さんの明細")
+    st.write(f"### 🗓️ 明細履歴")
     delete_mode = st.toggle("🗑️ 編集・削除モード")
 
     if delete_mode:
@@ -145,17 +150,17 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
+        # 名前を表示しないHTMLテーブル
         rows_html = ""
         for _, r in filtered_df.iterrows():
             short_date = r['日付'].strftime('%m-%d')
-            rows_html += f"<tr><td>{short_date}</td><td>{r['名前']}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>"
+            rows_html += f"<tr><td>{short_date}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>"
         
         st.markdown(f'''
             <table class="table-style">
                 <thead>
                     <tr>
                         <th class="col-date">日付</th>
-                        <th class="col-name">名前</th>
                         <th class="col-payee">支払先</th>
                         <th class="col-item">品名</th>
                         <th class="col-memo">備考</th>
@@ -166,9 +171,9 @@ if not filtered_df.empty:
             </table>
         ''', unsafe_allow_html=True)
 else:
-    st.info(f"{selected_user} さんの表示できるデータがありません。")
+    st.info(f"表示できる明細はありません。")
 
-# Enter移動などのJS (以前のものを継承)
+# JavaScript: Enter移動 + テンキー
 components.html("""
     <script>
     const doc = window.parent.document;
