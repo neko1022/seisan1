@@ -47,7 +47,7 @@ css_code = f"""
 
     /* ★ここが「🗓️ 明細履歴」専用の設定★ */
     .history-header {{
-        font-size: 1.2rem; /* ここを大きくすると文字が大きくなります */
+        font-size: 1.3rem; /* ここを大きくすると文字が大きくなります */
         color: #71018C;
         font-weight: bold;
         margin: 25px 0 10px 0;
