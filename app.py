@@ -35,21 +35,39 @@ css_code = f"""
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
-    .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }}
+    .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* ラベルとチェックボックスを横並びにするためのクラス */
-    .label-row {{ display: flex; align-items: center; margin-bottom: 4px; gap: 10px; }}
-    .label-text {{ font-size: 0.9rem; font-weight: bold; color: #333; }}
+    /* ★ ズレ解消のためのCSS調整 ★ */
+    /* ラベル行をフレックスボックスで高さを揃える */
+    div.label-row {{
+        display: flex;
+        align-items: center;
+        margin-bottom: -15px; /* 下の入力欄との隙間を詰める */
+    }}
+    
+    /* チェックボックス自体の余白を調整 */
+    [data-testid="stCheckbox"] {{
+        margin-bottom: 0px !important;
+        margin-top: 10px !important;
+    }}
+    
+    /* 項目名テキストのスタイル */
+    .custom-label {{
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-right: 10px;
+        color: #31333F;
+    }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- 安定版データ処理 ---
+# --- データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -130,13 +148,13 @@ else:
             # --- 1段目: 日付 と 品名 ---
             c1, c2 = st.columns(2)
             with c1:
-                st.write("日付")
+                st.write("**日付**")
                 input_date = st.date_input("日付", date.today(), label_visibility="collapsed")
             with c2:
-                # 品名ラベルと履歴スイッチを横並びに
-                col_l, col_r = st.columns([1, 1])
-                with col_l: st.write("品名・名目")
-                with col_r: use_item_h = st.checkbox("履歴から選択", key="h_item")
+                # カスタムHTMLでラベルとチェックボックスを横並びに
+                st.markdown('<div class="label-row"><span class="custom-label">品名・名目</span></div>', unsafe_allow_html=True)
+                # チェックボックスをラベルなしで配置
+                use_item_h = st.checkbox("履歴から選択", key="h_item")
                 
                 if use_item_h:
                     item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"), label_visibility="collapsed")
@@ -146,20 +164,18 @@ else:
             # --- 2段目: 支払先 と 金額 ---
             c3, c4 = st.columns(2)
             with c3:
-                # 支払先ラベルと履歴スイッチを横並びに
-                col_l2, col_r2 = st.columns([1, 1])
-                with col_l2: st.write("支払先")
-                with col_r2: use_payee_h = st.checkbox("履歴から選択", key="h_pay")
+                st.markdown('<div class="label-row"><span class="custom-label">支払先</span></div>', unsafe_allow_html=True)
+                use_payee_h = st.checkbox("履歴から選択", key="h_pay")
                 
                 if use_payee_h:
                     payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"), label_visibility="collapsed")
                 else:
                     payee = st.text_input("支払先入力", placeholder="例：〇〇商事", label_visibility="collapsed")
             with c4:
-                st.write("金額 (円)")
+                st.write("**金額 (円)**")
                 amount_str = st.text_input("金額入力", placeholder="数字を入力", label_visibility="collapsed")
             
-            st.write("備考")
+            st.write("**備考**")
             memo = st.text_area("備考入力", placeholder="補足があれば入力", height=70, label_visibility="collapsed")
 
             if st.button("登録する", use_container_width=True):
@@ -189,22 +205,4 @@ else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
                     st.markdown(f'<table class="table-style"><thead><tr><th>日付</th><th>支払先</th><th>品名</th><th>備考</th><th>金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
         elif user_pwd != "":
-            st.error("パスワードが違います")
-    else:
-        st.info("名前を選択して、パスワードを入力してください。")
-
-# JavaScript: テンキー対応
-components.html("""
-    <script>
-    const doc = window.parent.document;
-    setInterval(() => {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
-                input.type = 'number';
-                input.inputMode = 'numeric';
-            }
-        });
-    }, 1000);
-    </script>
-""", height=0)
+            st.error("パスワード不一致")
