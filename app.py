@@ -34,18 +34,18 @@ css_code = f"""
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     
-    /* 合計金額のサイズ調整 */
+/* 合計金額のサイズ調整 */
     .total-label {{ 
-        font-size: 2.4rem; /* ← 〇〇さんの合計 のサイズ */
-        color: #444; 
-        margin-bottom: 5px; 
-        font-weight: bold; 
+        font-size: 2.5rem !important; /* 確実に変わったとわかるよう、一旦大きく設定 */
+        color: #444 !important; 
+        font-weight: bold !important; 
+        display: block !important;
     }}
     .total-a {{ 
-        font-size: 3.5rem; /* ← 金額数値 のサイズ */
-        font-weight: bold; 
-        color: #71018C; 
-        margin: 0; 
+        font-size: 4.0rem !important; /* 確実に変わったとわかるよう、一旦大きく設定 */
+        font-weight: bold !important; 
+        color: #71018C !important; 
+        display: block !important;
     }}
 
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
