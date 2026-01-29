@@ -179,4 +179,57 @@ else:
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
                         cols = st.columns([5, 1])
-                        with cols[0]: st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int
+                        with cols[0]: st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
+                        with cols[1]:
+                            if st.button("🗑️", key=f"del_{idx}"):
+                                df_all.drop(idx).drop(columns=['年月'], errors='ignore').to_csv(CSV_FILE, index=False)
+                                st.rerun()
+                else:
+                    rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
+                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
+        elif user_pwd != "":
+            st.error("パスワードが違います")
+    else:
+        st.info("名前を選択して、パスワードを入力してください。")
+
+# JavaScript: サジェスト機能
+history_js = f"""
+    <script>
+    const doc = window.parent.document;
+    const historyData = {{ "支払先": {payee_h}, "品名・名目": {item_h}, "備考": {memo_h} }};
+    function createList(input, list) {{
+        const oldList = input.parentElement.querySelector('.custom-suggestion-list');
+        if (oldList) oldList.remove();
+        const div = doc.createElement('div');
+        div.className = 'custom-suggestion-list';
+        list.forEach(item => {{
+            const itemDiv = doc.createElement('div');
+            itemDiv.className = 'suggestion-item';
+            itemDiv.innerText = item;
+            itemDiv.onmousedown = (e) => {{
+                input.value = item;
+                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                div.style.display = 'none';
+            }};
+            div.appendChild(itemDiv);
+        }});
+        input.parentElement.style.position = 'relative';
+        input.parentElement.appendChild(div);
+        return div;
+    }}
+    setInterval(() => {{
+        const inputs = doc.querySelectorAll('input, textarea');
+        inputs.forEach(input => {{
+            const label = input.ariaLabel;
+            if (historyData[label] && !input.dataset.hasList) {{
+                const listDiv = createList(input, historyData[label]);
+                input.onfocus = () => {{ if(historyData[label].length > 0) listDiv.style.display = 'block'; }};
+                input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
+                input.dataset.hasList = "true";
+            }}
+            if (label && label.includes('金額')) {{ input.type = 'number'; input.inputMode = 'numeric'; }}
+        }});
+    }}, 1000);
+    </script>
+"""
+components.html(history_js, height=0)
