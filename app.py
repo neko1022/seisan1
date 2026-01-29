@@ -73,7 +73,7 @@ USER_PASS = "0000"
 ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
-is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
+is_admin = st.toggle("🛠️ 管理者モードに切り替え")
 
 if is_admin:
     pwd = st.text_input("管理者パスワード", type="password")
