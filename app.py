@@ -75,7 +75,6 @@ def load_data():
             return pd.DataFrame(columns=COLS)
     return pd.DataFrame(columns=COLS)
 
-# アプリ起動時にデータを読み込む
 df_all = load_data()
 
 def get_h(col):
@@ -92,7 +91,6 @@ ADMIN_PASS = "1234"
 is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
-    # --- 管理者画面（変更なし） ---
     pwd = st.text_input("管理者パスワード", type="password")
     if pwd == ADMIN_PASS:
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
@@ -120,7 +118,7 @@ if is_admin:
     elif pwd != "":
         st.error("パスワードが違います")
 else:
-    # --- 個人申請モード（不具合修正版） ---
+    # --- 個人申請モード ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
@@ -130,14 +128,12 @@ else:
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
         
         if user_pwd == USER_PASS:
-            # ここで最新のデータをフィルタリング
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else []
             
             with col_s2:
                 selected_month = st.selectbox("表示月", month_list) if month_list else ""
             
-            # フィルタリング条件を確実に適用
             if selected_month:
                 filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
             else:
@@ -146,7 +142,6 @@ else:
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -160,17 +155,15 @@ else:
             if st.button("登録する", use_container_width=True):
                 clean_amount = "".join(filter(str.isdigit, amount_str))
                 amount_val = int(clean_amount) if clean_amount else 0
-                if amount_val > 0 and payee != "" and item_name != "":
-                    # 保存用のデータフレーム作成
+                # 金額さえあれば登録可能（支払先・品名が空でもOK）
+                if amount_val > 0:
                     new_row = pd.DataFrame([[selected_user, input_date, payee, item_name, memo, amount_val]], columns=COLS)
-                    # 既存データと結合して保存（年月カラムは除外）
                     df_for_save = df_all.drop(columns=['年月'], errors='ignore')
-                    updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
-                    updated_df.to_csv(CSV_FILE, index=False)
+                    pd.concat([df_for_save, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
                     st.success("登録完了！")
-                    st.rerun() # 画面をリロードして反映させる
+                    st.rerun()
                 else:
-                    st.warning("項目を正しく入力してください。")
+                    st.warning("金額を入力してください。")
 
             st.markdown("---")
             if not filtered_df.empty:
@@ -192,7 +185,7 @@ else:
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript: サジェスト機能
+# --- JavaScript: サジェスト機能の復旧 ---
 history_js = f"""
     <script>
     const doc = window.parent.document;
