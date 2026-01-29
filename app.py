@@ -97,7 +97,7 @@ is_admin = st.toggle("🛠️ 管理者モードに切り替え")
 if is_admin:
     # パスワードチェック
     pwd = st.text_input("パスワードを入力してください", type="password")
-    if pwd == "1234":
+    if pwd == "8192":
         st.markdown('<div class="form-title">📊 管理者用：全体集計パネル</div>', unsafe_allow_html=True)
         if not df_all.empty:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
