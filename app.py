@@ -91,7 +91,7 @@ df_all = load_data()
 
 # --- 1. 画面上部の切り替えスイッチ ---
 # st.toggleをスイッチとして使用
-is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
+is_admin = st.toggle("🛠️ 管理者モードに切り替え")
 
 # --- 2. 管理者モード ---
 if is_admin:
