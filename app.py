@@ -34,18 +34,18 @@ css_code = f"""
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     
-/* 合計金額のサイズ調整 */
+    /* 合計金額のサイズ調整 */
     .total-label {{ 
-        font-size: 1.3rem !important; /* 確実に変わったとわかるよう、一旦大きく設定 */
-        color: #444 !important; 
-        font-weight: bold !important; 
-        display: block !important;
+        font-size: 1.1rem; /* ← 〇〇さんの合計 のサイズ */
+        color: #444; 
+        margin-bottom: 5px; 
+        font-weight: bold; 
     }}
     .total-a {{ 
-        font-size: 2.5rem !important; /* 確実に変わったとわかるよう、一旦大きく設定 */
-        font-weight: bold !important; 
-        color: #71018C !important; 
-        display: block !important;
+        font-size: 2.2rem; /* ← 金額数値 のサイズ */
+        font-weight: bold; 
+        color: #71018C; 
+        margin: 0; 
     }}
 
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
@@ -53,7 +53,7 @@ css_code = f"""
     
     /* ★明細履歴専用のスタイル★ */
     .history-header {{
-        font-size: 1.2rem;   /* 大きさ：自由に変えてください */
+        font-size: 1.5rem;   /* 大きさ：自由に変えてください */
         color: #71018C;      /* 色：メインの紫に設定 */
         font-weight: bold;   /* 太さ：太字 */
         margin-top: 20px;    /* 上の線との間隔 */
@@ -95,7 +95,7 @@ USER_PASS = "0000"
 ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
-is_admin = st.toggle("🛠️ 管理者モードに切り替え")
+is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
     pwd = st.text_input("管理者パスワード", type="password")
