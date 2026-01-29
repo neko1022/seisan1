@@ -18,7 +18,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- デザイン & JS設定 ---
+# --- デザイン & アイコン強制非表示CSS ---
 css_code = f"""
 <style>
     @font-face {{
@@ -27,15 +27,12 @@ css_code = f"""
     }}
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
     
-    /* 文字化け(keyboard_double_arrow...)対策の修正 */
-    /* アイコンフォントのみ標準フォントを適用して文字化けを回避 */
-    .st-emotion-cache-6qob1r, [data-testid="stHeader"], [data-testid="collapsedControl"] span {{
-        font-family: sans-serif !important;
-    }}
-    
-    /* ヘッダーの余計な隙間を詰める */
-    header[data-testid="stHeader"] {{
-        background-color: rgba(0,0,0,0);
+    /* 1. 問題の文字を透明にして物理的に見えなくする */
+    span[data-testid="stHeaderActionElements"], 
+    .st-emotion-cache-6qob1r, 
+    [data-testid="collapsedControl"] {{
+        color: transparent !important;
+        font-size: 0px !important;
     }}
 
     .stApp {{ background-color: #DEBCE5 !important; }}
@@ -45,25 +42,59 @@ css_code = f"""
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
-    /* テーブル全体のデザイン */
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* カラム幅の設定 */
     .col-date {{ width: 55px; }}
     .col-payee {{ width: 15%; }}
     .col-item {{ width: 25%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
     
-    /* サイドバー背景 */
     [data-testid="stSidebar"] {{ background-color: #f8f1f9 !important; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理関数 ---
+# --- 2. JavaScriptでアイコンを絵文字に差し替える ---
+components.html("""
+    <script>
+    const doc = window.parent.document;
+    
+    // アイコンの文字化けを見つけたら「三（メニュー）」絵文字に置き換える
+    setInterval(() => {
+        const target = doc.querySelector('[data-testid="collapsedControl"]');
+        if (target && target.innerText.includes('keyboard')) {
+            target.innerHTML = '<div style="color:#71018C; font-size:24px; cursor:pointer; padding:10px;">☰</div>';
+        }
+    }, 500);
+
+    // 既存のEnter移動とテンキー設定
+    setInterval(() => {
+        const inputs = doc.querySelectorAll('input');
+        inputs.forEach(input => {
+            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
+                input.type = 'number';
+                input.inputMode = 'numeric';
+            }
+        });
+    }, 1000);
+    
+    doc.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const all = Array.from(doc.querySelectorAll('input, textarea, select, button'));
+            const idx = all.indexOf(doc.activeElement);
+            if (idx > -1 && idx < all.length - 1) {
+                all[idx + 1].focus();
+                e.preventDefault();
+            }
+        }
+    });
+    </script>
+""", height=0)
+
+# --- データ処理関数以降は変更なし ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -81,12 +112,11 @@ def load_data():
 
 df_all = load_data()
 
-# --- サイドメニュー ---
 st.sidebar.write("### ⚙️ メニュー")
 mode = st.sidebar.radio("機能を選択", ["個人精算（申請）", "管理者画面（集計）"])
 
-# --- 1. 個人精算（申請画面） ---
 if mode == "個人精算（申請）":
+    # 申請者選択・月選択・合計表示
     col_s1, col_s2 = st.columns(2)
     with col_s1:
         name_list = ["山田太郎"]
@@ -94,7 +124,6 @@ if mode == "個人精算（申請）":
         for n in current_names:
             if n not in name_list and n != "": name_list.append(n)
         selected_user = st.selectbox("申請者を選択", name_list)
-
     with col_s2:
         if not df_all.empty:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
@@ -106,13 +135,9 @@ if mode == "個人精算（申請）":
             filtered_df = pd.DataFrame(columns=COLS)
 
     total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
-    st.markdown(f'''
-        <div class="header-box">
-            <p class="total-label">{selected_user} さんの経費合計 ({selected_month})</p>
-            <p class="total-a">{int(total_val):,} 円</p>
-        </div>
-    ''', unsafe_allow_html=True)
+    st.markdown(f'''<div class="header-box"><p class="total-label">{selected_user} さんの合計 ({selected_month})</p><p class="total-a">{int(total_val):,} 円</p></div>''', unsafe_allow_html=True)
 
+    # 入力フォーム
     st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns([1, 1, 1])
     with c1:
@@ -121,7 +146,6 @@ if mode == "個人精算（申請）":
         input_date = st.date_input("日付", date.today())
     with c3:
         payee = st.text_input("支払先", placeholder="例：〇〇商事")
-
     c4, c5 = st.columns([1, 1])
     with c4:
         item_name = st.text_input("品名・名目", placeholder="例：交通費")
@@ -135,13 +159,11 @@ if mode == "個人精算（申請）":
         if amount_val > 0:
             new_row = pd.DataFrame([[user_name, input_date, payee, item_name, memo, amount_val]], columns=COLS)
             df_for_save = df_all.drop(columns=['年月'], errors='ignore')
-            updated_df = pd.concat([df_for_save, new_row], ignore_index=True)
-            updated_df.fillna("").to_csv(CSV_FILE, index=False)
-            st.success(f"登録完了！")
+            pd.concat([df_for_save, new_row], ignore_index=True).fillna("").to_csv(CSV_FILE, index=False)
+            st.success("登録完了！")
             st.rerun()
-        else:
-            st.warning("金額を入力してください。")
 
+    # 明細表示
     st.markdown("---")
     if not filtered_df.empty:
         st.write(f"### 🗓️ 明細履歴")
@@ -150,8 +172,7 @@ if mode == "個人精算（申請）":
             for idx, row in filtered_df.iterrows():
                 cols = st.columns([5, 1])
                 with cols[0]:
-                    display_date = row['日付'].strftime('%m-%d')
-                    st.write(f"【{display_date}】 {row['支払先']} / {int(row['金額']):,}円")
+                    st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
                 with cols[1]:
                     if st.button("🗑️", key=f"del_{idx}"):
                         df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
@@ -160,67 +181,22 @@ if mode == "個人精算（申請）":
                 st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
         else:
             rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-            st.markdown(f'''
-                <table class="table-style">
-                    <thead>
-                        <tr>
-                            <th class="col-date">日付</th>
-                            <th class="col-payee">支払先</th>
-                            <th class="col-item">品名</th>
-                            <th class="col-memo">備考</th>
-                            <th class="col-amount">金額</th>
-                        </tr>
-                    </thead>
-                    <tbody>{rows_html}</tbody>
-                </table>
-            ''', unsafe_allow_html=True)
-else:
-    st.info(f"表示できる明細はありません。")
+            st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# --- 2. 管理者画面（集計画面） ---
-if mode == "管理者画面（集計）":
+elif mode == "管理者画面（集計）":
     st.write("### 📊 全体集計（管理者用）")
     if not df_all.empty:
         df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
         target_month = st.selectbox("集計月を選択", sorted(df_all['年月'].unique(), reverse=True))
         admin_df = df_all[df_all['年月'] == target_month].copy()
-        
         total_admin = admin_df["金額"].sum()
         st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 合計金額</p><p class="total-a">{int(total_admin):,} 円</p></div>', unsafe_allow_html=True)
-        
         st.write("#### 👤 申請者別合計")
         user_summary = admin_df.groupby("名前")["金額"].sum().reset_index()
         user_summary.columns = ["名前", "合計"]
         user_summary["合計"] = user_summary["合計"].apply(lambda x: f"{int(x):,} 円")
         st.table(user_summary)
-        
         csv_data = admin_df.drop(columns=['年月']).to_csv(index=False).encode('utf_8_sig')
         st.download_button(label="📥 CSVをダウンロード", data=csv_data, file_name=f"経費集計_{target_month}.csv", mime='text/csv')
     else:
         st.info("集計対象のデータがありません。")
-
-# --- 共通JS ---
-components.html("""
-    <script>
-    const doc = window.parent.document;
-    setInterval(() => {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
-                input.type = 'number';
-                input.inputMode = 'numeric';
-            }
-        });
-    }, 1000);
-    doc.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            const all = Array.from(doc.querySelectorAll('input, textarea, select, button'));
-            const idx = all.indexOf(doc.activeElement);
-            if (idx > -1 && idx < all.length - 1) {
-                all[idx + 1].focus();
-                e.preventDefault();
-            }
-        }
-    });
-    </script>
-""", height=0)
