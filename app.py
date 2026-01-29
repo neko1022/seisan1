@@ -32,19 +32,42 @@ css_code = f"""
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
+    
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
+
     .col-date {{ width: 55px; }}
     .col-payee {{ width: 22%; }}
     .col-item {{ width: 22%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
+
+    /* PC・スマホ共通：入力候補リストの見た目 */
+    .custom-suggestion-list {{
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        max-height: 150px;
+        overflow-y: auto;
+        box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+        width: 100%;
+        display: none;
+    }}
+    .suggestion-item {{
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        border-bottom: 1px solid #f0f0f0;
+    }}
+    .suggestion-item:hover {{ background-color: #f7e6f9; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理関数 ---
+# --- データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -62,7 +85,6 @@ def load_data():
 
 df_all = load_data()
 
-# --- 履歴取得 ---
 def get_h(col):
     return sorted([str(x) for x in df_all[col].unique() if str(x).strip() != ""])
 
@@ -93,10 +115,8 @@ else:
     total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
     st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-    # --- 修正した入力フォーム（5項目に統合） ---
     st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
     
-    # 履歴リストの作成
     payee_h = get_h("支払先")
     item_h = get_h("品名・名目")
     memo_h = get_h("備考")
@@ -104,7 +124,6 @@ else:
     c1, c2 = st.columns(2)
     with c1:
         input_date = st.date_input("日付", date.today())
-        # text_inputだが、JSで履歴を選べるようにする
         payee = st.text_input("支払先", placeholder="例：〇〇商事", key="payee_in")
         
     with c2:
@@ -122,7 +141,6 @@ else:
             st.success("登録完了！")
             st.rerun()
 
-    # 明細
     st.markdown("---")
     if not filtered_df.empty:
         st.write("### 🗓️ 明細履歴")
@@ -139,32 +157,52 @@ else:
             rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
             st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# --- 魔法のJavaScript: 入力欄に履歴を合体させる ---
+# --- 改良版JavaScript: 入力欄に独自のサジェスト機能を追加 ---
 history_js = f"""
     <script>
     const doc = window.parent.document;
-    
-    function setupDatalist(id, list) {{
-        let dl = doc.getElementById(id);
-        if (!dl) {{
-            dl = doc.createElement('datalist');
-            dl.id = id;
-            doc.body.appendChild(dl);
-        }}
-        dl.innerHTML = list.map(i => '<option value="'+i+'">').join('');
-    }}
+    const historyData = {{
+        "支払先": {payee_h},
+        "品名・名目": {item_h},
+        "備考": {memo_h}
+    }};
 
-    setupDatalist('payee_list', {payee_h});
-    setupDatalist('item_list', {item_h});
-    setupDatalist('memo_list', {memo_h});
+    function createList(input, list) {{
+        // すでにリストがあれば削除
+        const oldList = input.parentElement.querySelector('.custom-suggestion-list');
+        if (oldList) oldList.remove();
+
+        const div = doc.createElement('div');
+        div.className = 'custom-suggestion-list';
+        list.forEach(item => {{
+            const itemDiv = doc.createElement('div');
+            itemDiv.className = 'suggestion-item';
+            itemDiv.innerText = item;
+            itemDiv.onmousedown = (e) => {{ // clickだとfocusoutが先に走るのでmousedown
+                input.value = item;
+                // Streamlitに値を伝えるためのイベント発火
+                input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                div.style.display = 'none';
+            }};
+            div.appendChild(itemDiv);
+        }});
+        input.parentElement.style.position = 'relative';
+        input.parentElement.appendChild(div);
+        return div;
+    }}
 
     setInterval(() => {{
         const inputs = doc.querySelectorAll('input, textarea');
         inputs.forEach(input => {{
-            if (input.ariaLabel === '支払先') input.setAttribute('list', 'payee_list');
-            if (input.ariaLabel === '品名・名目') input.setAttribute('list', 'item_list');
-            if (input.ariaLabel === '備考') input.setAttribute('list', 'memo_list');
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {{
+            const label = input.ariaLabel;
+            if (historyData[label] && !input.dataset.hasList) {{
+                const listDiv = createList(input, historyData[label]);
+                input.onfocus = () => {{ if(historyData[label].length > 0) listDiv.style.display = 'block'; }};
+                input.onblur = () => {{ setTimeout(() => {{ listDiv.style.display = 'none'; }}, 200); }};
+                input.dataset.hasList = "true";
+            }}
+            // テンキー対応
+            if (label && label.includes('金額')) {{
                 input.type = 'number';
                 input.inputMode = 'numeric';
             }}
