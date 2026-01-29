@@ -32,7 +32,17 @@ css_code = f"""
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
-    
+
+    /* 「keyboard_double_arrow_right」などのシステム文字を非表示にする */
+.st-emotion-cache-6qob1r {
+    display: none !important;
+}
+
+/* もしくは、サイドバーのアイコンフォントが文字化けするのを防ぐ */
+[data-testid="stSidebarNav"] span {
+    font-family: sans-serif !important; /* ここだけ標準フォントに戻す */
+}
+
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
