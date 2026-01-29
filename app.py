@@ -25,14 +25,34 @@ css_code = f"""
         font-family: 'Mochiy Pop One';
         src: url(data:font/ttf;base64,{font_base64}) format('truetype');
     }}
+
+    /* 全体にフォントを適用 */
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
+
+    /* 【重要】keyboard_double_arrow... などの文字化けを消す設定 */
+    span[data-testid="stHeaderActionElements"], 
+    button div p, 
+    .st-emotion-cache-6qob1r,
+    [data-testid="collapsedControl"] {{
+        font-family: sans-serif !important; /* アイコン部分は標準フォントに戻す */
+    }}
+
+    /* 背景とヘッダーのデザイン */
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
     .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
-    .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
+    /* ボタンデザイン */
+    .stButton>button {{ 
+        background-color: #71018C !important; 
+        color: white !important; 
+        border-radius: 25px !important; 
+        font-weight: bold !important; 
+    }}
+
+    /* テーブルデザイン */
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
@@ -43,16 +63,10 @@ css_code = f"""
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
     
-    /* サイドバーのカスタマイズ */
+    /* サイドバーの背景 */
     [data-testid="stSidebar"] {{ background-color: #f8f1f9 !important; }}
-
-    /* 追加：システム用アイコンの文字化け（keyboard_double_arrow...）を非表示にする */
-    button[kind="header"] {{
-        display: none !important;
-    }}
 </style>
 """
-
 st.markdown(css_code, unsafe_allow_html=True)
 
 # --- データ処理関数 ---
@@ -73,11 +87,11 @@ def load_data():
 
 df_all = load_data()
 
-# --- サイドメニューによる画面切り替え ---
+# --- サイドメニュー ---
 st.sidebar.write("### ⚙️ メニュー")
 mode = st.sidebar.radio("機能を選択", ["個人精算（申請）", "管理者画面（集計）"])
 
-# --- 1. 個人精算（これまでの機能） ---
+# --- 1. 個人精算 ---
 if mode == "個人精算（申請）":
     st.write("### 🔍 表示設定")
     col_s1, col_s2 = st.columns(2)
@@ -144,7 +158,7 @@ if mode == "個人精算（申請）":
             rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
             st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
 
-# --- 2. 管理者画面（追加した機能） ---
+# --- 2. 管理者画面 ---
 elif mode == "管理者画面（集計）":
     st.write("### 📊 管理者用：全体集計パネル")
     
@@ -153,23 +167,18 @@ elif mode == "管理者画面（集計）":
         target_month = st.selectbox("確認月を選択", sorted(df_all['年月'].unique(), reverse=True))
         admin_df = df_all[df_all['年月'] == target_month].copy()
         
-        # A. 全体合計
         total_admin = admin_df["金額"].sum()
         st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 全員分合計</p><p class="total-a">{int(total_admin):,} 円</p></div>', unsafe_allow_html=True)
         
-        # B. 人別集計（ここが上司が一番見たいところ）
         st.write("#### 👤 人別集計")
         user_summary = admin_df.groupby("名前")["金額"].sum().reset_index()
         user_summary.columns = ["名前", "合計金額"]
-        # 円をつけて表示
         user_summary["合計金額"] = user_summary["合計金額"].apply(lambda x: f"{int(x):,} 円")
         st.table(user_summary)
         
-        # C. CSVダウンロード
         csv = admin_df.drop(columns=['年月']).to_csv(index=False).encode('utf_8_sig')
-        st.download_button(label="📥 この月のデータをExcel用に保存", data=csv, file_name=f"経費集計_{target_month}.csv", mime='text/csv')
+        st.download_button(label="📥 この月のデータをCSV保存", data=csv, file_name=f"経費集計_{target_month}.csv", mime='text/csv')
 
-        # D. 全明細
         with st.expander("📄 全員の明細を確認する"):
             st.dataframe(admin_df[COLS], use_container_width=True, hide_index=True)
     else:
