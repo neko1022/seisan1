@@ -51,7 +51,7 @@ css_code = f"""
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- 安定版データ処理 ---
+# --- データ処理 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -69,11 +69,17 @@ def load_data():
 
 df_all = load_data()
 
+# 履歴（ユニークなリスト）を取得する関数
+def get_unique_history(column_name):
+    if column_name in df_all.columns:
+        return sorted([str(x) for x in df_all[column_name].unique() if str(x).strip() != ""])
+    return []
+
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
-is_admin = st.toggle("🛠️ 管理者モードに切り替え")
+is_admin = st.toggle("🛠️ 管理者モードに切り替え (上司専用)")
 
 if is_admin:
     pwd = st.text_input("管理者パスワード", type="password")
@@ -127,15 +133,30 @@ else:
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム（履歴機能なしの純粋なテキスト入力）
+            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
+            
             c1, c2 = st.columns(2)
             with c1:
                 input_date = st.date_input("日付", date.today())
-                payee = st.text_input("支払先", placeholder="例：〇〇商事")
+                
+                # 支払先の入力切り替え
+                use_payee_h = st.checkbox("履歴から支払先を選択")
+                if use_payee_h:
+                    payee = st.selectbox("支払先履歴", [""] + get_unique_history("支払先"))
+                else:
+                    payee = st.text_input("支払先", placeholder="例：〇〇商事")
+                
             with c2:
-                item_name = st.text_input("品名・名目", placeholder="例：交通費")
+                # 品名・名目の入力切り替え
+                use_item_h = st.checkbox("履歴から品名を選択")
+                if use_item_h:
+                    item_name = st.selectbox("品名履歴", [""] + get_unique_history("品名・名目"))
+                else:
+                    item_name = st.text_input("品名・名目", placeholder="例：交通費")
+                    
                 amount_str = st.text_input("金額 (円)", placeholder="数字を入力")
+            
             memo = st.text_area("備考", placeholder="補足があれば入力", height=70)
 
             if st.button("登録する", use_container_width=True):
@@ -170,7 +191,7 @@ else:
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript: テンキー対応のみ維持
+# JavaScript: テンキー対応
 components.html("""
     <script>
     const doc = window.parent.document;
