@@ -85,6 +85,7 @@ item_h = get_h("品名・名目")
 memo_h = get_h("備考")
 
 # --- パスワード設定 (暫定) ---
+# 本来は名前ごとに分けるのが理想ですが、まずは共通パスワードでロックします
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
@@ -126,6 +127,7 @@ else:
         selected_user = st.selectbox("名前を選択", ["選択してください"] + name_list)
     
     if selected_user != "選択してください":
+        # 名前を選んだらパスワード入力を求める
         user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
         
         if user_pwd == USER_PASS:
@@ -180,6 +182,7 @@ else:
         st.info("名前を選択して、パスワードを入力してください。")
 
 # --- JavaScript ---
+# (前回のサジェスト機能を継承)
 history_js = f"""
     <script>
     const doc = window.parent.document;
