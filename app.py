@@ -36,13 +36,13 @@ css_code = f"""
     
     /* 合計金額のサイズ調整 */
     .total-label {{ 
-        font-size: 1.4rem; /* ← 〇〇さんの合計 のサイズ */
+        font-size: 2.4rem; /* ← 〇〇さんの合計 のサイズ */
         color: #444; 
         margin-bottom: 5px; 
         font-weight: bold; 
     }}
     .total-a {{ 
-        font-size: 2.5rem; /* ← 金額数値 のサイズ */
+        font-size: 3.5rem; /* ← 金額数値 のサイズ */
         font-weight: bold; 
         color: #71018C; 
         margin: 0; 
