@@ -40,7 +40,7 @@ css_code = f"""
 
     /* カラム幅の設定（名前列を削除した分、他を調整） */
     .col-date {{ width: 55px; }}
-    .col-payee {{ width: 15%; }}
+    .col-payee {{ width: 25%; }}
     .col-item {{ width: 25%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
