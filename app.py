@@ -5,8 +5,8 @@ import base64
 from datetime import date
 import streamlit.components.v1 as components
 
-# ページ設定（サイドバーを完全に無効化し、アイコンの発生を防ぐ）
-st.set_page_config(page_title="経費精算システム", layout="wide", initial_sidebar_state="collapsed")
+# ページ設定
+st.set_page_config(page_title="経費精算システム", layout="wide")
 
 # --- フォント読み込み ---
 def get_base64_font(font_file):
@@ -18,7 +18,7 @@ def get_base64_font(font_file):
 
 font_base64 = get_base64_font("MochiyPopOne-Regular.ttf")
 
-# --- デザイン（アイコン文字を徹底排除） ---
+# --- デザイン & JS設定 ---
 css_code = f"""
 <style>
     @font-face {{
@@ -26,12 +26,6 @@ css_code = f"""
         src: url(data:font/ttf;base64,{font_base64}) format('truetype');
     }}
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
-    
-    /* 画面上部のシステムヘッダーと開閉ボタンを物理的に消去 */
-    header[data-testid="stHeader"], [data-testid="collapsedControl"] {{
-        display: none !important;
-    }}
-
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
@@ -39,12 +33,14 @@ css_code = f"""
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
+    /* テーブル全体のデザイン */
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
+    /* カラム幅の設定（名前列を削除した分、他を調整） */
     .col-date {{ width: 55px; }}
-    .col-payee {{ width: 25%; }}
+    .col-payee {{ width: 15%; }}
     .col-item {{ width: 25%; }}
     .col-memo {{ width: auto; }}
     .col-amount {{ width: 85px; }}
@@ -52,7 +48,7 @@ css_code = f"""
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ処理 ---
+# --- データ処理関数 ---
 CSV_FILE = "expenses.csv"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
@@ -70,10 +66,14 @@ def load_data():
 
 df_all = load_data()
 
-# --- メイン画面（個人清算のみ） ---
+# --- メイン画面 ---
+
+# 1. 絞り込み表示
 col_s1, col_s2 = st.columns(2)
 with col_s1:
+    # 選択肢（将来的に増やすことも可能）
     name_list = ["山田太郎"]
+    # 既存データにある名前も選択肢に加える
     current_names = sorted(df_all["名前"].unique().tolist())
     for n in current_names:
         if n not in name_list and n != "": name_list.append(n)
@@ -84,11 +84,13 @@ with col_s2:
         df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
         month_list = sorted(df_all['年月'].unique(), reverse=True)
         selected_month = st.selectbox("表示月を選択", month_list)
+        # 「名前」と「月」でフィルタリング
         filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
     else:
         selected_month = ""
         filtered_df = pd.DataFrame(columns=COLS)
 
+# 合計表示
 total_val = pd.to_numeric(filtered_df["金額"], errors='coerce').fillna(0).sum()
 st.markdown(f'''
     <div class="header-box">
@@ -97,10 +99,11 @@ st.markdown(f'''
     </div>
 ''', unsafe_allow_html=True)
 
-# 入力フォーム
+# 2. 入力フォーム
 st.markdown('<div class="form-title">📝 新規データ入力</div>', unsafe_allow_html=True)
 c1, c2, c3 = st.columns([1, 1, 1])
 with c1:
+    # 登録する名前（選択された申請者を引き継ぐ）
     user_name = st.selectbox("名前", name_list, key="input_name", index=name_list.index(selected_user) if selected_user in name_list else 0)
 with c2:
     input_date = st.date_input("日付", date.today())
@@ -127,16 +130,18 @@ if st.button("登録する", use_container_width=True):
     else:
         st.warning("金額を入力してください。")
 
-# 履歴明細
+# 3. 履歴明細（名前列を表示しない）
 st.markdown("---")
 if not filtered_df.empty:
     st.write(f"### 🗓️ 明細履歴")
     delete_mode = st.toggle("🗑️ 編集・削除モード")
+
     if delete_mode:
         for idx, row in filtered_df.iterrows():
             cols = st.columns([5, 1])
             with cols[0]:
-                st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
+                display_date = row['日付'].strftime('%m-%d')
+                st.write(f"【{display_date}】 {row['支払先']} / {int(row['金額']):,}円")
             with cols[1]:
                 if st.button("🗑️", key=f"del_{idx}"):
                     df_to_save = df_all.drop(idx).drop(columns=['年月'], errors='ignore')
@@ -144,4 +149,51 @@ if not filtered_df.empty:
                     st.rerun()
             st.markdown("<hr style='margin:5px 0; border:0.5px solid #ddd;'>", unsafe_allow_html=True)
     else:
-        rows_html = "".join([f"<tr><td>{r['日付'].strftime
+        # 名前を表示しないHTMLテーブル
+        rows_html = ""
+        for _, r in filtered_df.iterrows():
+            short_date = r['日付'].strftime('%m-%d')
+            rows_html += f"<tr><td>{short_date}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>"
+        
+        st.markdown(f'''
+            <table class="table-style">
+                <thead>
+                    <tr>
+                        <th class="col-date">日付</th>
+                        <th class="col-payee">支払先</th>
+                        <th class="col-item">品名</th>
+                        <th class="col-memo">備考</th>
+                        <th class="col-amount">金額</th>
+                    </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+        ''', unsafe_allow_html=True)
+else:
+    st.info(f"表示できる明細はありません。")
+
+# JavaScript: Enter移動 + テンキー
+components.html("""
+    <script>
+    const doc = window.parent.document;
+    setInterval(() => {
+        const inputs = doc.querySelectorAll('input');
+        inputs.forEach(input => {
+            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
+                input.type = 'number';
+                input.inputMode = 'numeric';
+            }
+        });
+    }, 1000);
+    doc.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const all = Array.from(doc.querySelectorAll('input, textarea, select, button'));
+            const idx = all.indexOf(doc.activeElement);
+            if (idx > -1 && idx < all.length - 1) {
+                all[idx + 1].focus();
+                e.preventDefault();
+            }
+        }
+    });
+    </script>
+""", height=0)
