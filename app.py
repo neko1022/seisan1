@@ -128,7 +128,7 @@ else:
     # --- 個人申請モード ---
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        name_list = ["山田太郎", "佐藤花子", "鈴木一郎"] 
+        name_list = ["五十嵐直之", "三輪正樹", "松浦理華", "佐野哲平"] 
         selected_user = st.selectbox("名前を選択", ["選択してください"] + name_list)
     
     if selected_user != "選択してください":
