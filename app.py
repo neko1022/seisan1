@@ -12,7 +12,7 @@ st.set_page_config(page_title="経費精算システム", layout="wide")
 
 # --- スプレッドシート接続設定 ---
 # ★ここにseisan1用のスプレッドシートURLを貼り付けてください★
-SPREADSHEET_URL = "ここにコピーしたURLを貼り付けてください"
+SPREADSHEET_URL = "kotsuhi-user@keihi-system-486404.iam.gserviceaccount.com"
 
 def get_ss_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
