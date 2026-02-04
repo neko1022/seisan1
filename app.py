@@ -13,11 +13,9 @@ SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1_1fqSbSoV45zTDOGeVEWi
 
 def get_ss_client():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    # Streamlit CloudのSecretsに保存した "gcp_service_account" を使用
     service_account_info = json.loads(st.secrets["gcp_service_account"])
     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     client = gspread.authorize(credentials)
-    # タブ名「expenses」を開く
     return client.open_by_url(SPREADSHEET_URL).worksheet("expenses")
 
 # ページ設定
@@ -49,44 +47,31 @@ css_code = f"""
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     
-    .total-label {{ 
-        font-size: 1.1rem; 
-        color: #444; 
-        margin-bottom: 5px; 
-        font-weight: bold; 
-    }}
-    .total-a {{ 
-        font-size: 2.2rem; 
-        font-weight: bold; 
-        color: #71018C; 
-        margin: 0; 
-    }}
+    .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
+    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
 
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
     .history-header {{
-        font-size: 1.5rem;
-        color: #71018C;
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 10px;
+        font-size: 1.5rem; color: #71018C; font-weight: bold; margin-top: 20px; margin-bottom: 10px;
     }}
 
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    .col-date {{ width: 70px; }}
-    .col-payee {{ width: 22%; }}
-    .col-item {{ width: 22%; }}
-    .col-memo {{ width: auto; }}
-    .col-amount {{ width: 85px; }}
+    /* 比率指定の列幅設定 */
+    .col-date {{ width: 10%; }}     /* 日付 */
+    .col-payee {{ width: 20%; }}    /* 支払先 */
+    .col-item {{ width: 20%; }}     /* 品名 */
+    .col-memo {{ width: 30%; }}     /* 備考 */
+    .col-amount {{ width: 20%; }}   /* 金額 */
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- スプレッドシートからのデータ読み込み ---
+# --- データ読み込み ---
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
 def load_data():
@@ -149,19 +134,13 @@ else:
         if user_pwd == USER_PASS:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else [date.today().strftime('%Y年%m月')]
-            
             with col_s2:
                 selected_month = st.selectbox("表示月", month_list) if month_list else ""
             
-            if selected_month:
-                filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy()
-            else:
-                filtered_df = pd.DataFrame(columns=COLS)
-
+            filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if not df_all.empty else pd.DataFrame(columns=COLS)
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -178,7 +157,6 @@ else:
                 if amount_val > 0:
                     try:
                         sheet = get_ss_client()
-                        # スプレッドシートに1行追加
                         new_row = [selected_user, input_date.strftime("%Y/%m/%d"), payee, item_name, memo, amount_val]
                         sheet.append_row(new_row)
                         st.success("登録完了！")
@@ -191,7 +169,6 @@ else:
             st.markdown("---")
             if not filtered_df.empty:
                 st.markdown('<div class="history-header">🗓️ 明細履歴</div>', unsafe_allow_html=True)
-                
                 delete_mode = st.toggle("🗑️ 編集・削除モード")
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
@@ -202,24 +179,22 @@ else:
                                 try:
                                     sheet = get_ss_client()
                                     all_values = sheet.get_all_values()
-                                    # スプレッドシート上の行特定と削除 (ヘッダー+1)
                                     for i, val in enumerate(all_values):
-                                        if i == 0: continue # ヘッダー
+                                        if i == 0: continue
                                         if val[0] == row['名前'] and val[1] == row['日付'].strftime("%Y/%m/%d") and val[2] == row['支払先'] and int(val[5]) == int(row['金額']):
                                             sheet.delete_rows(i + 1)
                                             break
                                     st.rerun()
-                                except:
-                                    st.error("削除エラーが発生しました")
+                                except: st.error("削除エラーが発生しました")
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
+                    # ヘッダーにそれぞれのクラスを割り当て
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
         elif user_pwd != "":
             st.error("パスワードが違います")
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript (金額入力モードの制御)
 components.html("""
     <script>
     const doc = window.parent.document;
