@@ -77,7 +77,7 @@ css_code = f"""
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    .col-date {{ width: 55px; }}
+    .col-date {{ width: 70px; }}
     .col-payee {{ width: 22%; }}
     .col-item {{ width: 22%; }}
     .col-memo {{ width: auto; }}
