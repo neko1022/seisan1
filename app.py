@@ -11,14 +11,13 @@ from oauth2client.service_account import ServiceAccountCredentials
 st.set_page_config(page_title="経費精算システム", layout="wide")
 
 # --- スプレッドシート接続設定 ---
-# ★ここにseisan1用のスプレッドシートURLを貼り付けてください★
-SPREADSHEET_URL = "kotsuhi-user@keihi-system-486404.iam.gserviceaccount.com"
+# ★あなたのURLをここに正しく埋め込みました★
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1_1fqSbSoV45zTDOGeVEWiA7ZnVWFDrz3EOW0Pw7tm9U/edit#gid=0"
 
 def get_ss_client():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name("google_creds.json", scope)
     client = gspread.authorize(creds)
-    # sheet1（一番左のタブ）を開く
     return client.open_by_url(SPREADSHEET_URL).sheet1
 
 # --- フォント・CSS設定 ---
@@ -47,29 +46,13 @@ css_code = f"""
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
     
-    .total-label {{ 
-        font-size: 1.1rem; 
-        color: #444; 
-        margin-bottom: 5px; 
-        font-weight: bold; 
-    }}
-    .total-a {{ 
-        font-size: 2.2rem; 
-        font-weight: bold; 
-        color: #71018C; 
-        margin: 0; 
-    }}
+    .total-label {{ font-size: 1.1rem; color: #444; margin-bottom: 5px; font-weight: bold; }}
+    .total-a {{ font-size: 2.2rem; font-weight: bold; color: #71018C; margin: 0; }}
 
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
-    .history-header {{
-        font-size: 1.5rem;
-        color: #71018C;
-        font-weight: bold;
-        margin-top: 20px;
-        margin-bottom: 10px;
-    }}
+    .history-header {{ font-size: 1.5rem; color: #71018C; font-weight: bold; margin-top: 20px; margin-bottom: 10px; }}
 
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
@@ -100,7 +83,6 @@ def load_data():
         return pd.DataFrame(columns=COLS)
 
 df_all = load_data()
-
 USER_PASS = "0000" 
 ADMIN_PASS = "1234"
 
@@ -162,7 +144,6 @@ else:
             total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
             st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
 
-            # 新規入力フォーム
             st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
@@ -188,24 +169,14 @@ else:
             st.markdown("---")
             if not filtered_df.empty:
                 st.markdown('<div class="history-header">🗓️ 明細履歴</div>', unsafe_allow_html=True)
-                
-                delete_mode = st.toggle("🗑️ 削除モード")
-                if delete_mode:
-                    # スプレッドシートからの削除は行番号の管理が複雑なため、
-                    # 今回は「スプレッドシートを直接編集してください」という案内か、
-                    # 簡易的な行削除機能を付けることも可能ですが、まずは安全な「表示」を優先しています。
-                    st.info("データの削除や修正は、共有しているGoogleスプレッドシートから直接行ってください。")
-                    for idx, row in filtered_df.iterrows():
-                        st.write(f"【{row['日付'].strftime('%m-%d')}】 {row['支払先']} / {int(row['金額']):,}円")
-                else:
-                    rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-                    st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
+                st.info("データの削除や修正は、共有しているGoogleスプレッドシートから直接行ってください。")
+                rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
+                st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
         elif user_pwd != "":
             st.error("パスワードが違います")
     else:
         st.info("名前を選択して、パスワードを入力してください。")
 
-# JavaScript
 components.html("""
     <script>
     const doc = window.parent.document;
