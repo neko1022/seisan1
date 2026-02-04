@@ -170,6 +170,7 @@ else:
             if not filtered_df.empty:
                 st.markdown('<div class="history-header">🗓️ 明細履歴</div>', unsafe_allow_html=True)
                 delete_mode = st.toggle("🗑️ 編集・削除モード")
+                
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
                         cols = st.columns([5, 1])
@@ -179,13 +180,31 @@ else:
                                 try:
                                     sheet = get_ss_client()
                                     all_values = sheet.get_all_values()
+                                    target_row_num = -1
+                                    
+                                    # 検索条件を整理（空白削除や型変換を徹底）
+                                    search_name = str(row['名前']).strip()
+                                    search_date = row['日付'].strftime("%Y/%m/%d")
+                                    search_amount = str(int(row['金額']))
+                                    
                                     for i, val in enumerate(all_values):
-                                        if i == 0: continue
-                                        if val[0] == row['名前'] and val[1] == row['日付'].strftime("%Y/%m/%d") and val[2] == row['支払先'] and int(val[5]) == int(row['金額']):
-                                            sheet.delete_rows(i + 1)
+                                        if i == 0: continue 
+                                        # 名前(0列目)、日付(1列目)、金額(5列目)が一致する行を特定
+                                        if (len(val) >= 6 and 
+                                            str(val[0]).strip() == search_name and 
+                                            str(val[1]).replace("-", "/") == search_date and 
+                                            str(val[5]).replace(",", "").strip() == search_amount):
+                                            target_row_num = i + 1
                                             break
-                                    st.rerun()
-                                except: st.error("削除エラーが発生しました")
+                                    
+                                    if target_row_num > 0:
+                                        sheet.delete_rows(target_row_num)
+                                        st.success("削除しました。")
+                                        st.rerun()
+                                    else:
+                                        st.error("一致する行が見つかりませんでした。再読み込みしてください。")
+                                except Exception as e:
+                                    st.error(f"削除エラー: {e}")
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
                     # ヘッダーにそれぞれのクラスを割り当て
