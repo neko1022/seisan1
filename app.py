@@ -153,7 +153,7 @@ else:
                         sheet = ss.worksheet("expenses")
                         new_row = [selected_user, input_date.strftime("%Y/%m/%d"), payee, item_name, memo, amount_val]
                         sheet.append_row(new_row)
-                        st.cache_data.clear() # 成功後キャッシュクリア
+                        st.cache_data.clear() 
                         st.success("登録完了！")
                         st.rerun()
                     except Exception as e: st.error(f"エラー: {e}")
@@ -172,34 +172,37 @@ else:
                                 try:
                                     ss = get_ss_client()
                                     sheet = ss.worksheet("expenses")
-                                    # ボタンが押された瞬間にシートの最新情報を取得
+                                    # ボタンが押された瞬間のシート実データを取得
                                     all_vals = sheet.get_all_values()
                                     target_row = -1
                                     
-                                    search_name = str(row['名前']).strip()
-                                    search_date = row['日付'].strftime("%Y/%m/%d")
-                                    search_amount = str(int(row['金額']))
+                                    # 行特定を厳密にするための変数
+                                    s_name = str(row['名前']).strip()
+                                    s_date = row['日付'].strftime("%Y/%m/%d")
+                                    s_amount = str(int(row['金額']))
                                     
                                     for i, v in enumerate(all_vals):
                                         if i == 0: continue
-                                        # 名前、日付、金額の3点で正確に行を特定
                                         if (len(v) >= 6 and 
-                                            str(v[0]).strip() == search_name and 
-                                            str(v[1]).replace("-", "/") == search_date and 
-                                            str(v[5]).replace(",", "").strip() == search_amount):
+                                            str(v[0]).strip() == s_name and 
+                                            str(v[1]).replace("-", "/") == s_date and 
+                                            str(v[5]).replace(",", "").strip() == s_amount):
                                             target_row = i + 1
                                             break
                                     
                                     if target_row > 0:
+                                        # 削除を実行したら、その結果を待たずに即キャッシュクリアしてリロード
                                         sheet.delete_rows(target_row)
-                                        # 削除成功直後にキャッシュを消して即リロード
                                         st.cache_data.clear()
                                         st.rerun()
                                     else:
-                                        # 万が一見つからない場合は再読み込みを促す
-                                        st.error("行を特定できませんでした。画面を更新してください。")
+                                        # もし行が見つからない場合は、すでに消えている可能性が高いのでリロード
+                                        st.cache_data.clear()
+                                        st.rerun()
                                 except:
-                                    st.error("削除エラーが発生しました。")
+                                    # エラーが発生しても、念のため画面をリロードして整合性を取る
+                                    st.cache_data.clear()
+                                    st.rerun()
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
