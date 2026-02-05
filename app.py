@@ -8,15 +8,16 @@ import streamlit.components.v1 as components
 import gspread
 from google.oauth2.service_account import Credentials
 
-# --- スプレッドシート設定 (Secretsから読み込み) ---
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1_1fqSbSoV45zTDOGeVEWiA7ZnVWFDrz3EOW0Pw7tm9U/edit?gid=0#gid=0"
+# --- スプレッドシート設定 ---
+# 会社用の新しいURLに差し替え済み
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dO51vjvj-Q9OH5SRAdP9SxDaGpBcyYgVi_wEE0qGMG0/edit?gid=0#gid=0"
 
 def get_ss_client():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     service_account_info = json.loads(st.secrets["gcp_service_account"])
     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     client = gspread.authorize(credentials)
-    return client.open_by_url(SPREADSHEET_URL).worksheet("expenses")
+    return client.open_by_url(SPREADSHEET_URL)
 
 # ページ設定
 st.set_page_config(page_title="経費精算システム", layout="wide")
@@ -39,9 +40,8 @@ css_code = f"""
     }}
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
     
-    header, [data-testid="stHeader"], [data-testid="collapsedControl"], .st-emotion-cache-6qob1r {{
+    header, [data-testid="stHeader"], [data-testid="collapsedControl"] {{
         display: none !important;
-        height: 0px !important;
     }}
 
     .stApp {{ background-color: #DEBCE5 !important; }}
@@ -53,42 +53,47 @@ css_code = f"""
     .form-title {{ background: #71018C; color: white; padding: 8px 15px; border-radius: 5px; margin-bottom: 15px; }}
     .stButton>button {{ background-color: #71018C !important; color: white !important; border-radius: 25px !important; font-weight: bold !important; }}
     
-    .history-header {{
-        font-size: 1.5rem; color: #71018C; font-weight: bold; margin-top: 20px; margin-bottom: 10px;
-    }}
-
     .table-style {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 5px; table-layout: fixed; }}
     .table-style th {{ background: #71018C; color: white; padding: 8px 5px; text-align: left; font-size: 0.8rem; }}
     .table-style td {{ border-bottom: 1px solid #eee; padding: 10px 5px; color: #333; font-size: 0.8rem; word-wrap: break-word; }}
 
-    /* 比率指定の列幅設定 */
-    .col-date {{ width: 10%; }}     /* 日付 */
-    .col-payee {{ width: 20%; }}    /* 支払先 */
-    .col-item {{ width: 20%; }}     /* 品名 */
-    .col-memo {{ width: 30%; }}     /* 備考 */
-    .col-amount {{ width: 20%; }}   /* 金額 */
+    .col-date {{ width: 10%; }}
+    .col-payee {{ width: 20%; }}
+    .col-item {{ width: 20%; }}
+    .col-memo {{ width: 30%; }}
+    .col-amount {{ width: 20%; }}
 </style>
 """
 st.markdown(css_code, unsafe_allow_html=True)
 
-# --- データ読み込み ---
+# --- 処理 ---
+# テキストファイルからユーザーを読み込む
+USER_FILE = "namae.txt"
 COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 
+@st.cache_data(ttl=60)
 def load_data():
     try:
-        sheet = get_ss_client()
+        ss = get_ss_client()
+        sheet = ss.worksheet("expenses")
         data = sheet.get_all_records()
-        if not data:
-            return pd.DataFrame(columns=COLS)
+        if not data: return pd.DataFrame(columns=COLS)
         df = pd.DataFrame(data)
         df["日付"] = pd.to_datetime(df["日付"]).dt.date
         return df.fillna("")
-    except:
-        return pd.DataFrame(columns=COLS)
+    except: return pd.DataFrame(columns=COLS)
+
+def load_users():
+    users = {}
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) == 2: users[parts[0]] = parts[1]
+    return users
 
 df_all = load_data()
-
-USER_PASS = "0000" 
+user_dict = load_users()
 ADMIN_PASS = "1234"
 
 # --- 画面構成 ---
@@ -102,46 +107,34 @@ if is_admin:
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月'))
             target_month = st.selectbox("集計月", sorted(df_all['年月'].unique(), reverse=True))
             admin_df = df_all[df_all['年月'] == target_month].copy()
-            total_admin = admin_df["金額"].sum()
-            st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 全員合計</p><p class="total-a">{int(total_admin):,} 円</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="header-box"><p class="total-label">{target_month} 全員合計</p><p class="total-a">{int(admin_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
             
             user_summary = admin_df.groupby("名前")["金額"].sum().reset_index()
             for idx, row in user_summary.iterrows():
-                c_switch, c_name, c_amt = st.columns([1, 2, 2])
-                with c_switch: show_detail = st.toggle("明細", key=f"details_{idx}")
-                with c_name: st.write(f"**{row['名前']}**")
-                with c_amt: st.write(f"{int(row['金額']):,} 円")
-                if show_detail:
-                    u_detail = admin_df[admin_df["名前"] == row["名前"]].copy()
-                    rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in u_detail.iterrows()])
+                c_sw, c_nm, c_at = st.columns([1, 2, 2])
+                with c_sw: show_det = st.toggle("明細", key=f"det_{idx}")
+                with c_nm: st.write(f"**{row['名前']}**")
+                with c_at: st.write(f"{int(row['金額']):,} 円")
+                if show_det:
+                    u_det = admin_df[admin_df["名前"] == row["名前"]].copy()
+                    rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in u_det.iterrows()])
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-                st.markdown("<hr style='margin:5px 0; border:0.5px solid #eee;'>", unsafe_allow_html=True)
-            
-            csv_data = admin_df.drop(columns=['年月']).to_csv(index=False).encode('utf_8_sig')
-            st.download_button(label="📥 CSVダウンロード", data=csv_data, file_name=f"集計_{target_month}.csv", mime='text/csv')
-    elif pwd != "":
-        st.error("パスワードが違います")
+                st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
 else:
-    # --- 個人申請モード ---
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        name_list = ["五十嵐直之", "三輪正樹", "松浦理華", "佐野哲平"] 
-        selected_user = st.selectbox("名前を選択", ["選択してください"] + name_list)
+    name_list = list(user_dict.keys())
+    selected_user = st.selectbox("名前を選択", ["選択してください"] + name_list)
     
     if selected_user != "選択してください":
-        user_pwd = st.text_input(f"{selected_user} さんのパスワード", type="password")
-        
-        if user_pwd == USER_PASS:
+        user_pwd = st.text_input("パスワード", type="password")
+        if user_pwd == user_dict.get(selected_user):
             df_all['年月'] = df_all['日付'].apply(lambda x: x.strftime('%Y年%m月')) if not df_all.empty else ""
             month_list = sorted(df_all['年月'].unique(), reverse=True) if not df_all.empty else [date.today().strftime('%Y年%m月')]
-            with col_s2:
-                selected_month = st.selectbox("表示月", month_list) if month_list else ""
-            
+            selected_month = st.selectbox("表示月", month_list)
             filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if not df_all.empty else pd.DataFrame(columns=COLS)
-            total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
-            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
+            
+            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(filtered_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
 
-            st.markdown(f'<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
+            st.markdown('<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
                 input_date = st.date_input("日付", date.today())
@@ -156,21 +149,20 @@ else:
                 amount_val = int(clean_amount) if clean_amount else 0
                 if amount_val > 0:
                     try:
-                        sheet = get_ss_client()
+                        ss = get_ss_client()
+                        sheet = ss.worksheet("expenses")
                         new_row = [selected_user, input_date.strftime("%Y/%m/%d"), payee, item_name, memo, amount_val]
                         sheet.append_row(new_row)
+                        st.cache_data.clear() # 成功後キャッシュクリア
                         st.success("登録完了！")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"書き込みエラー: {e}")
-                else:
-                    st.warning("金額を入力してください。")
+                    except Exception as e: st.error(f"エラー: {e}")
+                else: st.warning("金額を入力してください。")
 
-            st.markdown("---")
             if not filtered_df.empty:
-                st.markdown('<div class="history-header">🗓️ 明細履歴</div>', unsafe_allow_html=True)
+                st.markdown("---")
+                st.write("### 🗓️ 明細履歴")
                 delete_mode = st.toggle("🗑️ 編集・削除モード")
-                
                 if delete_mode:
                     for idx, row in filtered_df.iterrows():
                         cols = st.columns([5, 1])
@@ -178,53 +170,35 @@ else:
                         with cols[1]:
                             if st.button("🗑️", key=f"del_{idx}"):
                                 try:
-                                    sheet = get_ss_client()
-                                    all_values = sheet.get_all_values()
-                                    target_row_num = -1
-                                    
-                                    # 検索条件を整理（空白削除や型変換を徹底）
+                                    ss = get_ss_client()
+                                    sheet = ss.worksheet("expenses")
+                                    all_vals = sheet.get_all_values()
+                                    target_row = -1
                                     search_name = str(row['名前']).strip()
                                     search_date = row['日付'].strftime("%Y/%m/%d")
                                     search_amount = str(int(row['金額']))
-                                    
-                                    for i, val in enumerate(all_values):
-                                        if i == 0: continue 
-                                        # 名前(0列目)、日付(1列目)、金額(5列目)が一致する行を特定
-                                        if (len(val) >= 6 and 
-                                            str(val[0]).strip() == search_name and 
-                                            str(val[1]).replace("-", "/") == search_date and 
-                                            str(val[5]).replace(",", "").strip() == search_amount):
-                                            target_row_num = i + 1
+                                    for i, v in enumerate(all_vals):
+                                        if i == 0: continue
+                                        if (len(v) >= 6 and str(v[0]).strip() == search_name and str(v[1]).replace("-", "/") == search_date and str(v[5]).replace(",", "").strip() == search_amount):
+                                            target_row = i + 1
                                             break
-                                    
-                                    if target_row_num > 0:
-                                        sheet.delete_rows(target_row_num)
-                                        st.success("削除しました。")
+                                    if target_row > 0:
+                                        sheet.delete_rows(target_row)
+                                        st.cache_data.clear()
                                         st.rerun()
-                                    else:
-                                        st.error("一致する行が見つかりませんでした。再読み込みしてください。")
-                                except Exception as e:
-                                    st.error(f"削除エラー: {e}")
+                                except: st.error("削除エラー")
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
-                    # ヘッダーにそれぞれのクラスを割り当て
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
-        elif user_pwd != "":
-            st.error("パスワードが違います")
-    else:
-        st.info("名前を選択して、パスワードを入力してください。")
 
 components.html("""
-    <script>
-    const doc = window.parent.document;
-    setInterval(() => {
-        const inputs = doc.querySelectorAll('input');
-        inputs.forEach(input => {
-            if (input.ariaLabel && input.ariaLabel.includes('金額')) {
-                input.type = 'number';
-                input.inputMode = 'numeric';
-            }
-        });
-    }, 1000);
-    </script>
-""", height=0)
+<script>
+const doc = window.parent.document;
+setInterval(() => {
+    doc.querySelectorAll('input').forEach(input => {
+        if (input.ariaLabel && input.ariaLabel.includes('金額')) {
+            input.type = 'number'; input.inputMode = 'numeric';
+        }
+    });
+}, 1000);
+</script>""", height=0)
