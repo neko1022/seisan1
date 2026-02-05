@@ -9,10 +9,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # --- スプレッドシート設定 ---
+# 会社用の新しいURL
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dO51vjvj-Q9OH5SRAdP9SxDaGpBcyYgVi_wEE0qGMG0/edit?gid=0#gid=0"
 
 def get_ss_client():
     scopes = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    # Secretsからサービスアカウント情報を読み込み
     service_account_info = json.loads(st.secrets["gcp_service_account"])
     credentials = Credentials.from_service_account_info(service_account_info, scopes=scopes)
     client = gspread.authorize(credentials)
@@ -38,7 +40,10 @@ css_code = f"""
         src: url(data:font/ttf;base64,{font_base64}) format('truetype');
     }}
     * {{ font-family: 'Mochiy Pop One', sans-serif !important; }}
-    header, [data-testid="stHeader"], [data-testid="collapsedControl"] {{ display: none !important; }}
+    
+    header, [data-testid="stHeader"], [data-testid="collapsedControl"] {{
+        display: none !important;
+    }}
 
     .stApp {{ background-color: #DEBCE5 !important; }}
     .header-box {{ border-bottom: 3px solid #71018C; padding: 10px 0; margin-bottom: 20px; }}
@@ -70,7 +75,7 @@ COLS = ["名前", "日付", "支払先", "品名・名目", "備考", "金額"]
 def load_data():
     try:
         ss = get_ss_client()
-        sheet = ss.worksheet("expenses")
+        sheet = ss.worksheet("expenses") # タブ名を確認
         data = sheet.get_all_records()
         if not data: return pd.DataFrame(columns=COLS)
         df = pd.DataFrame(data)
@@ -127,8 +132,7 @@ else:
             selected_month = st.selectbox("表示月", month_list)
             filtered_df = df_all[(df_all['年月'] == selected_month) & (df_all['名前'] == selected_user)].copy() if not df_all.empty else pd.DataFrame(columns=COLS)
             
-            total_val = filtered_df["金額"].sum() if not filtered_df.empty else 0
-            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(total_val):,} 円</p></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="header-box"><p class="total-label">{selected_user} さんの合計</p><p class="total-a">{int(filtered_df["金額"].sum()):,} 円</p></div>', unsafe_allow_html=True)
 
             st.markdown('<div class="form-title">📝 新規入力</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
@@ -149,7 +153,7 @@ else:
                         sheet = ss.worksheet("expenses")
                         new_row = [selected_user, input_date.strftime("%Y/%m/%d"), payee, item_name, memo, amount_val]
                         sheet.append_row(new_row)
-                        st.cache_data.clear() # 最新状態にするためにクリア
+                        st.cache_data.clear() # 成功後キャッシュクリア
                         st.success("登録完了！")
                         st.rerun()
                     except Exception as e: st.error(f"エラー: {e}")
@@ -168,7 +172,7 @@ else:
                                 try:
                                     ss = get_ss_client()
                                     sheet = ss.worksheet("expenses")
-                                    # 削除直前に全行を読み込み
+                                    # ボタンが押された瞬間にシートの最新情報を取得
                                     all_vals = sheet.get_all_values()
                                     target_row = -1
                                     
@@ -178,20 +182,24 @@ else:
                                     
                                     for i, v in enumerate(all_vals):
                                         if i == 0: continue
+                                        # 名前、日付、金額の3点で正確に行を特定
                                         if (len(v) >= 6 and 
                                             str(v[0]).strip() == search_name and 
                                             str(v[1]).replace("-", "/") == search_date and 
                                             str(v[5]).replace(",", "").strip() == search_amount):
-                                                target_row = i + 1
-                                                break
+                                            target_row = i + 1
+                                            break
                                     
                                     if target_row > 0:
                                         sheet.delete_rows(target_row)
-                                        st.cache_data.clear() # ここで画面上の古いデータを破棄
-                                        st.rerun() # 画面をリセットして最新化
+                                        # 削除成功直後にキャッシュを消して即リロード
+                                        st.cache_data.clear()
+                                        st.rerun()
                                     else:
-                                        st.error("行が見つかりません。")
-                                except: st.error("削除エラー")
+                                        # 万が一見つからない場合は再読み込みを促す
+                                        st.error("行を特定できませんでした。画面を更新してください。")
+                                except:
+                                    st.error("削除エラーが発生しました。")
                 else:
                     rows_html = "".join([f"<tr><td>{r['日付'].strftime('%m-%d')}</td><td>{r['支払先']}</td><td>{r['品名・名目']}</td><td>{r['備考']}</td><td>{int(r['金額']):,}円</td></tr>" for _, r in filtered_df.iterrows()])
                     st.markdown(f'<table class="table-style"><thead><tr><th class="col-date">日付</th><th class="col-payee">支払先</th><th class="col-item">品名</th><th class="col-memo">備考</th><th class="col-amount">金額</th></tr></thead><tbody>{rows_html}</tbody></table>', unsafe_allow_html=True)
